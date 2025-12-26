@@ -1,0 +1,21 @@
+方案 3（最简单、最 Windows）：用 PowerShell 做免密（不碰 Git Bash 的 HOME）
+
+打开 PowerShell（普通就行，必要时管理员）
+
+生成 key（如果你还没有）：
+
+ssh-keygen -t ed25519
+
+
+把公钥追加到服务器的 authorized_keys（会让你输一次密码）：
+
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh -p 27100 root@connect.nma1.seetacloud.com "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+
+配好后怎么验证（必须）
+
+不管你用哪个方案，最后都执行：
+
+ssh -p 27100 root@connect.nma1.seetacloud.com
+
+
+✅ 如果不再问密码，直接进服务器，就成功了。
