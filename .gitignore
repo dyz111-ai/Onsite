@@ -56,3 +56,5 @@ desktop.ini
 # 日志文件
 *.log
 logs/
+
+cache
