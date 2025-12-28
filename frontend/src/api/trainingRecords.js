@@ -5,13 +5,27 @@ const api = axios.create({
   timeout: 10000
 })
 
+// 请求拦截器 - 添加 token
+api.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  error => {
+    return Promise.reject(error)
+  }
+)
+
 export const getTrainingRecords = async () => {
   const response = await api.get('/training/records')
   return response.data
 }
 
-export const createTrainingRecord = async (recordData) => {
-  const response = await api.post('/training/records', recordData)
+export const createTrainingRecord = async () => {
+  const response = await api.post('/training/records')
   return response.data
 }
 

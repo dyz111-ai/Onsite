@@ -11,52 +11,60 @@
       {{ message }}
     </div>
 
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-container">
+      <div class="loading-spinner"></div>
+      <p>加载中...</p>
+    </div>
+
     <!-- 训练记录列表 -->
-    <div v-if="trainingRecords.length > 0" class="records-section">
+    <div v-else-if="trainingRecords.length > 0" class="records-section">
       <h3>训练记录</h3>
       <div class="records-container">
         <div class="records-list">
           <div v-for="record in trainingRecords" :key="record.id" class="record-card">
             <div class="record-header">
               <div class="record-info">
-                <div class="record-id">
-                  <strong>训练ID：</strong>{{ record.id }}
+                <div class="record-field">
+                  <strong>训练ID：</strong>{{ record.training_id }}
                 </div>
-                <div class="record-time">
+                <div class="record-field">
                   <strong>创建时间：</strong>{{ record.createdAt }}
+                </div>
+                <div class="record-field">
+                  <strong>状态：</strong>{{ record.status }}
+                </div>
+                <div class="record-field">
+                  <strong>训练成本：</strong>{{ record.train_cost }}
+                </div>
+                <div class="record-field">
+                  <strong>测试分数：</strong>{{ record.test_score }}
                 </div>
               </div>
               <div class="record-actions">
-                <button 
-                  v-if="record.status !== 'completed'"
-                  @click="handleStartTraining(record.id)" 
-                  :disabled="record.loading || record.status === 'running'" 
-                  class="start-btn">
-                  {{ record.loading ? '训练中...' : record.status === 'running' ? '运行中' : '开始训练' }}
+                <button @click="viewMonitor(record.training_id)" class="monitor-btn">
+                  查看监控
                 </button>
-                <span v-else class="completed-badge">已完成</span>
-
-                <button @click="deleteRecord(record.id)" :disabled="record.loading" class="delete-btn">
+                <button @click="deleteRecord(record.id)" class="delete-btn">
                   删除
                 </button>
               </div>
             </div>
             
-            <!-- 该记录的日志输出 -->
+            <!-- 训练日志 -->
             <div v-if="record.logs && record.logs.length > 0" class="log-section">
               <div class="log-header">
                 <h4>执行日志</h4>
-                <button @click="toggleLogs(record.id)" class="toggle-logs-btn">
+                <button @click="toggleLogs(record.training_id)" class="toggle-logs-btn">
                   {{ record.showLogs ? '隐藏日志' : '显示日志' }}
                 </button>
               </div>
-              <div v-if="record.showLogs" class="log-container" :ref="el => setLogRef(record.id, el)">
+              <div v-if="record.showLogs" class="log-container" :ref="el => setLogRef(record.training_id, el)">
                 <div v-for="(log, index) in record.logs" :key="index" class="log-line">
                   {{ log }}
                 </div>
               </div>
             </div>
-            
           </div>
         </div>
       </div>
@@ -78,6 +86,39 @@
         </div>
       </div>
     </div>
+    <!-- 监控图表弹窗 -->
+    <div v-if="showMonitorDialog" class="dialog-overlay" @click="closeMonitorDialog">
+      <div class="dialog-content monitor-dialog" @click.stop>
+        <div class="dialog-header">
+          <h3>训练监控 - ID: {{ currentMonitorId }}</h3>
+          <button class="close-btn" @click="closeMonitorDialog">×</button>
+        </div>
+        <div class="dialog-body">
+          <div v-if="monitorLoading" class="loading">加载中...</div>
+          <div v-else-if="monitorError" class="error-message">{{ monitorError }}</div>
+          <div v-else-if="monitorData.length === 0" class="no-data">暂无监控数据</div>
+          <div v-else class="charts-container">
+            <!-- CPU 使用率图表 -->
+            <div class="chart-item">
+              <h4>CPU 使用率 (秒)</h4>
+              <canvas ref="cpuChart"></canvas>
+            </div>
+            
+            <!-- GPU 利用率图表 -->
+            <div class="chart-item">
+              <h4>GPU 利用率 (%)</h4>
+              <canvas ref="gpuChart"></canvas>
+            </div>
+            
+            <!-- 内存使用图表 -->
+            <div class="chart-item">
+              <h4>内存使用 (MB)</h4>
+              <canvas ref="memoryChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -86,14 +127,31 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { startTraining, getTrainingResult } from '../api/training'
 import { getTrainingRecords, createTrainingRecord, updateTrainingRecord, deleteTrainingRecord } from '../api/trainingRecords'
 import { io } from 'socket.io-client'
+import { Chart, registerables } from 'chart.js'
+import axios from 'axios'
+
+Chart.register(...registerables)
 
 const message = ref('')
 const messageType = ref('info')
 const showDialog = ref(false)
 const trainingRecords = ref([])
+const loading = ref(true)
 const logRefs = ref({})
 let socket = null
 let currentTrainingId = null
+
+const showMonitorDialog = ref(false)
+const currentMonitorId = ref(null)
+const monitorData = ref([])
+const monitorLoading = ref(false)
+const monitorError = ref('')
+const cpuChart = ref(null)
+const gpuChart = ref(null)
+const memoryChart = ref(null)
+let cpuChartInstance = null
+let gpuChartInstance = null
+let memoryChartInstance = null
 
 const setLogRef = (id, el) => {
   if (el) {
@@ -111,31 +169,33 @@ const scrollToBottom = (recordId) => {
 }
 
 // 切换日志显示/隐藏
-const toggleLogs = (recordId) => {
-  const record = trainingRecords.value.find(r => r.id === recordId)
+const toggleLogs = (trainingId) => {
+  const record = trainingRecords.value.find(r => r.training_id === trainingId)
   if (record) {
     record.showLogs = !record.showLogs
     if (record.showLogs) {
-      // 显示日志后滚动到底部
-      scrollToBottom(recordId)
+      scrollToBottom(trainingId)
     }
   }
 }
 
 // 从服务器加载训练记录
 const loadTrainingRecords = async () => {
+  loading.value = true
   try {
     const result = await getTrainingRecords()
-    // 为每个记录添加运行时状态
+    // 为每条记录添加日志数组和显示状态
     trainingRecords.value = (result.data || []).map(record => ({
       ...record,
-      loading: false,  // 运行时状态，不保存到 JSON
-      showLogs: false  // 默认不显示日志
+      logs: record.logs || [],
+      showLogs: false
     }))
   } catch (error) {
     message.value = '加载训练记录失败：' + (error.response?.data?.error || error.message)
     messageType.value = 'error'
     trainingRecords.value = []
+  } finally {
+    loading.value = false
   }
 }
 
@@ -157,33 +217,31 @@ const closeDialog = () => {
 }
 
 const createTraining = async () => {
-  // 生成训练记录
-  const newRecord = {
-    id: 'TRAIN-' + Date.now(),
-    createdAt: new Date().toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    }),
-    logs: [],
-    csvData: [],
-    status: 'pending'  // 添加状态字段：pending, running, completed, failed
-  }
-  
   try {
-    await createTrainingRecord(newRecord)
+    // 创建训练记录
+    const result = await createTrainingRecord()
+    const trainingId = result.data.training_id
+    
+    // 设置当前训练ID
+    currentTrainingId = trainingId
+    
     // 重新加载记录列表
     await loadTrainingRecords()
     closeDialog()
     
-    // 同时在监控面板创建监控记录
-    createMonitorRecord(newRecord.id, newRecord.createdAt)
-    
-    message.value = '训练记录已创建'
+    message.value = `训练记录已创建 (ID: ${trainingId})，正在启动训练...`
     messageType.value = 'success'
+    
+    // 启动训练脚本，传递 training_id
+    try {
+      await startTraining({ training_id: trainingId })
+      message.value = `训练 ${trainingId} 已启动，请查看日志`
+      messageType.value = 'success'
+    } catch (error) {
+      message.value = '启动训练失败：' + (error.response?.data?.error || error.message)
+      messageType.value = 'error'
+      currentTrainingId = null
+    }
   } catch (error) {
     message.value = '创建训练记录失败：' + (error.response?.data?.error || error.message)
     messageType.value = 'error'
@@ -285,17 +343,183 @@ const deleteRecord = async (recordId) => {
   
   try {
     await deleteTrainingRecord(recordId)
-    // 重新加载记录列表
     await loadTrainingRecords()
-    
-    // 同时删除对应的监控记录
-    deleteMonitorRecord(recordId)
     
     message.value = '训练记录已删除'
     messageType.value = 'success'
   } catch (error) {
     message.value = '删除失败：' + (error.response?.data?.error || error.message)
     messageType.value = 'error'
+  }
+}
+
+const viewMonitor = async (trainingId) => {
+  currentMonitorId.value = trainingId
+  monitorError.value = ''
+  monitorData.value = []
+  
+  // 先显示弹窗，但不显示加载状态
+  showMonitorDialog.value = true
+  
+  // 等待弹窗 DOM 渲染
+  await nextTick()
+  await nextTick()
+  
+  // 开始加载数据
+  monitorLoading.value = true
+  
+  try {
+    console.log('正在加载监控数据，training_id:', trainingId)
+    const response = await axios.get(`/api/training/monitor/${trainingId}`)
+    console.log('监控数据响应:', response.data)
+    monitorData.value = response.data.data
+    console.log('监控数据长度:', monitorData.value.length)
+    
+    if (monitorData.value.length === 0) {
+      monitorError.value = '暂无监控数据'
+      monitorLoading.value = false
+      return
+    }
+    
+    // 数据加载完成，隐藏加载状态
+    monitorLoading.value = false
+    
+    // 等待图表容器渲染
+    await nextTick()
+    await nextTick()
+    
+    console.log('开始绘制图表')
+    console.log('cpuChart ref:', cpuChart.value)
+    console.log('gpuChart ref:', gpuChart.value)
+    console.log('memoryChart ref:', memoryChart.value)
+    
+    // 使用 setTimeout 确保 DOM 完全渲染
+    setTimeout(() => {
+      drawCharts()
+    }, 100)
+  } catch (error) {
+    console.error('加载监控数据失败:', error)
+    monitorError.value = error.response?.data?.error || '加载监控数据失败'
+    monitorLoading.value = false
+  }
+}
+
+const closeMonitorDialog = () => {
+  showMonitorDialog.value = false
+  if (cpuChartInstance) cpuChartInstance.destroy()
+  if (gpuChartInstance) gpuChartInstance.destroy()
+  if (memoryChartInstance) memoryChartInstance.destroy()
+}
+
+const drawCharts = () => {
+  console.log('drawCharts 被调用')
+  console.log('monitorData.value:', monitorData.value)
+  
+  if (monitorData.value.length === 0) {
+    console.log('没有数据，退出')
+    return
+  }
+  
+  const labels = monitorData.value.map(d => d.timestamp)
+  console.log('时间标签:', labels)
+  
+  if (cpuChart.value) {
+    console.log('绘制 CPU 图表')
+    if (cpuChartInstance) cpuChartInstance.destroy()
+    const cpuData = monitorData.value.map(d => parseFloat(d.cpu_usage_total_seconds))
+    console.log('CPU 数据:', cpuData)
+    
+    cpuChartInstance = new Chart(cpuChart.value, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'CPU 使用 (秒)',
+          data: cpuData,
+          borderColor: 'rgb(75, 192, 192)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          tension: 0.1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: true } }
+      }
+    })
+    console.log('CPU 图表创建完成')
+  } else {
+    console.log('cpuChart ref 不存在')
+  }
+  
+  if (gpuChart.value) {
+    console.log('绘制 GPU 图表')
+    if (gpuChartInstance) gpuChartInstance.destroy()
+    const gpuData = monitorData.value.map(d => parseFloat(d['gpu_utilization_total(%)']))
+    console.log('GPU 数据:', gpuData)
+    
+    gpuChartInstance = new Chart(gpuChart.value, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'GPU 利用率 (%)',
+          data: gpuData,
+          borderColor: 'rgb(255, 99, 132)',
+          backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          tension: 0.1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: true } },
+        scales: { y: { beginAtZero: true, max: 100 } }
+      }
+    })
+    console.log('GPU 图表创建完成')
+  } else {
+    console.log('gpuChart ref 不存在')
+  }
+  
+  if (memoryChart.value) {
+    console.log('绘制内存图表')
+    if (memoryChartInstance) memoryChartInstance.destroy()
+    const gpuMemData = monitorData.value.map(d => parseFloat(d.gpu_memory_total_mb))
+    const sysMemData = monitorData.value.map(d => parseFloat(d.memory_usage_total_mb))
+    console.log('GPU 内存数据:', gpuMemData)
+    console.log('系统内存数据:', sysMemData)
+    
+    memoryChartInstance = new Chart(memoryChart.value, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'GPU 内存 (MB)',
+            data: gpuMemData,
+            borderColor: 'rgb(153, 102, 255)',
+            backgroundColor: 'rgba(153, 102, 255, 0.2)',
+            tension: 0.1
+          },
+          {
+            label: '系统内存 (MB)',
+            data: sysMemData,
+            borderColor: 'rgb(255, 159, 64)',
+            backgroundColor: 'rgba(255, 159, 64, 0.2)',
+            tension: 0.1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: true } }
+      }
+    })
+    console.log('内存图表创建完成')
+  } else {
+    console.log('memoryChart ref 不存在')
   }
 }
 
@@ -325,57 +549,35 @@ onMounted(() => {
   })
 
   socket.on('training_log', (data) => {
+    console.log('收到日志:', data)
     if (currentTrainingId) {
-      const record = trainingRecords.value.find(r => r.id === currentTrainingId)
+      const record = trainingRecords.value.find(r => r.training_id === currentTrainingId)
       if (record) {
-        record.logs.push(data.message)
-        scrollToBottom(currentTrainingId)
-        // 保存日志更新到服务器（节流，避免频繁保存）
-        if (record.logs.length % 10 === 0) {
-          saveRecordUpdate(currentTrainingId, { logs: record.logs })
+        if (!record.logs) {
+          record.logs = []
         }
+        record.logs.push(data.message)
+        // 自动展开日志
+        record.showLogs = true
+        scrollToBottom(currentTrainingId)
       }
     }
   })
 
   socket.on('training_complete', async (data) => {
+    console.log('训练完成:', data)
     if (currentTrainingId) {
-      const record = trainingRecords.value.find(r => r.id === currentTrainingId)
+      const record = trainingRecords.value.find(r => r.training_id === currentTrainingId)
       if (record) {
-        record.loading = false
-        
         if (data.status === 'success') {
-          // 训练成功，自动加载CSV结果
-          message.value = '训练完成！正在加载结果...'          
+          message.value = `训练 ${currentTrainingId} 完成！`
           messageType.value = 'success'
           
-          try {
-            // 加载CSV数据
-            const result = await getTrainingResult()
-            record.csvData = result.data
-            
-            // 更新状态为completed，但不保存csvData到JSON
-            await saveRecordUpdate(currentTrainingId, { 
-              status: 'completed',
-              logs: record.logs
-            })
-            
-            // 更新监控记录
-            updateMonitorStatus(currentTrainingId, 'completed', result.data)
-            
-            message.value = '训练完成！已自动加载监控数据'
-            messageType.value = 'success'
-          } catch (error) {
-            message.value = '训练完成，但加载结果失败：' + (error.response?.data?.error || error.message)
-            messageType.value = 'error'
-            await saveRecordUpdate(currentTrainingId, { status: 'completed', logs: record.logs })
-          }
+          // 重新加载训练记录以获取更新后的成本
+          await loadTrainingRecords()
         } else {
-          // 训练失败
-          message.value = '训练失败：' + data.message
+          message.value = `训练 ${currentTrainingId} 失败：${data.message}`
           messageType.value = 'error'
-          await saveRecordUpdate(currentTrainingId, { status: 'failed', logs: record.logs })
-          updateMonitorStatus(currentTrainingId, 'failed')
         }
       }
       currentTrainingId = null
@@ -519,11 +721,12 @@ h4 {
   display: flex;
   gap: 2rem;
   flex-wrap: wrap;
+  flex: 1;
 }
 
-.record-id,
-.record-time {
+.record-field {
   color: #555;
+  font-size: 0.95rem;
 }
 
 .record-actions {
@@ -532,6 +735,7 @@ h4 {
   flex-wrap: nowrap;
 }
 
+.monitor-btn,
 .start-btn,
 .refresh-btn,
 .delete-btn {
@@ -541,6 +745,15 @@ h4 {
   font-size: 0.9rem;
   cursor: pointer;
   transition: background 0.3s;
+}
+
+.monitor-btn {
+  background: #3498db;
+  color: white;
+}
+
+.monitor-btn:hover {
+  background: #2980b9;
 }
 
 .start-btn {
@@ -757,6 +970,74 @@ tbody tr:hover {
 
 .confirm-btn:hover {
   background: #7b1fa2;
+}
+
+.monitor-dialog {
+  max-width: 1200px;
+  width: 95%;
+}
+
+.monitor-dialog .dialog-body {
+  padding: 2rem;
+  min-height: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.charts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.chart-item {
+  background: #f9f9f9;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.chart-item h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.chart-item canvas {
+  width: 100% !important;
+  height: 300px !important;
+}
+
+.loading,
+.no-data {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  color: #666;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #9c27b0;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>
 

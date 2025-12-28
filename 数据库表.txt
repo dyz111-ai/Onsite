@@ -69,6 +69,18 @@
   user_id              integer              NOT NULL
   created_time         date                 NOT NULL
   status               character varying    NOT NULL
-  train_cost           double precision     NOT NULL
-  test_score           double precision     NOT NULL
-  total_score          double precision     NOT NULL
+  train_cost           double precision     
+  test_score           double precision     
+  total_score          double precision     
+
+  --4.渲染任务表
+CREATE TABLE IF NOT EXISTS renderrender id SERIAL PRIMARY KEY.USer id INTEGER NOT NULL,status VARCHAR(10)NOT NULL CHEcK(status IN('Rendering', 'completed')),
+created time DATE NOT NULL,render cOSt FLOAT NOT NULL
+H U H
+H 1 U
+5.训练任务表--
+CREATE TABLE IF NOT EXISTs training task(
+training id SERIAL PRIMARY KEY,
+USer id INTEGER NOT NULL,
+created time DATE NOT NULL,
+status VARCHAR(20)NOT NULL CHECK(status IN('Training','Trained''Testing','Tested'))
