@@ -1,0 +1,74 @@
+============================================================
+数据库中的表列表
+============================================================
+找到 9 个表:
+----------------------------------------
+  1. TEST
+  2. admin
+  3. competition
+  4. mytest
+  5. participant
+  6. render
+  7. test_task
+  8. training_render_relation
+  9. training_task
+----------------------------------------
+
+表: TEST
+------------------------------
+  test_attribute       uuid                 NOT NULL
+
+表: admin
+------------------------------
+  admin_id             integer              NOT NULL
+  account              character varying    NOT NULL
+  password             character varying    NOT NULL
+
+表: competition
+------------------------------
+  competition_id       integer              NOT NULL
+  created_time         date                 NOT NULL
+  end_time             date                 NOT NULL
+  status               character varying    NOT NULL
+  type                 character varying    NOT NULL
+  number               integer              NOT NULL
+
+表: mytest
+------------------------------
+  my_id                integer              NOT NULL
+  my_name              character varying    NOT NULL
+
+表: participant
+------------------------------
+  participant_id       integer              NOT NULL
+  account              character varying    NOT NULL
+  password             character varying    NOT NULL
+
+表: render
+------------------------------
+  render_id            integer              NOT NULL
+  user_id              integer              NOT NULL
+  status               character varying    NOT NULL
+  created_time         date                 NOT NULL
+  render_cost          double precision     NOT NULL
+
+表: test_task
+------------------------------
+  training_id          integer              NOT NULL
+  competition_id       integer              NOT NULL
+  score                double precision     NOT NULL
+
+表: training_render_relation
+------------------------------
+  training_id          integer              NOT NULL
+  render_id            integer              NOT NULL
+
+表: training_task
+------------------------------
+  training_id          integer              NOT NULL
+  user_id              integer              NOT NULL
+  created_time         date                 NOT NULL
+  status               character varying    NOT NULL
+  train_cost           double precision     NOT NULL
+  test_score           double precision     NOT NULL
+  total_score          double precision     NOT NULL

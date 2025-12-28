@@ -19,3 +19,9 @@ ssh -p 27100 root@connect.nma1.seetacloud.com
 
 
 ✅ 如果不再问密码，直接进服务器，就成功了。
+
+
+venv\Scripts\activate
+deactivate
+python -m app.main
+cd backend
