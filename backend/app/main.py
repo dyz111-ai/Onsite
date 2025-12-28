@@ -7,10 +7,16 @@ import csv
 import json
 import threading
 import platform
+from app.config import Config
 
 app = Flask(__name__)
+app.config.from_object(Config)
 CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# 注册认证蓝图
+from app.api.auth import auth_bp
+app.register_blueprint(auth_bp)
 
 @app.route('/')
 def root():

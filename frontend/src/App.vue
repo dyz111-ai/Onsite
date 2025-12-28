@@ -1,6 +1,7 @@
 <template>
   <div id="app">
-    <nav class="sidebar">
+    <!-- 只在非登录页显示侧边栏 -->
+    <nav v-if="!isLoginPage" class="sidebar">
       <div class="logo">Onsite测训一体</div>
       <ul class="nav-menu">
         <li>
@@ -13,23 +14,43 @@
           <router-link to="/training" class="nav-item">训练提交</router-link>
         </li>
         <li>
-          <router-link to="/monitor" class="nav-item">监控面板</router-link>
-        </li>
-        <li>
           <router-link to="/evaluation" class="nav-item">测试评估</router-link>
         </li>
         <li>
           <router-link to="/result" class="nav-item">结果展示</router-link>
         </li>
       </ul>
+      <div class="user-info">
+        <div class="username">{{ username }}</div>
+        <button @click="handleLogout" class="logout-btn">退出登录</button>
+      </div>
     </nav>
-    <main class="main-content">
+    <main :class="isLoginPage ? 'main-content-full' : 'main-content'">
       <router-view />
     </main>
   </div>
 </template>
 
 <script setup>
+import { computed, watch, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { getCurrentUser, logout } from './utils/auth'
+
+const route = useRoute()
+const router = useRouter()
+
+const isLoginPage = computed(() => route.path === '/login')
+const username = ref(getCurrentUser()?.username || '未登录')
+
+// 监听路由变化，更新用户名
+watch(() => route.path, () => {
+  const user = getCurrentUser()
+  username.value = user?.username || '未登录'
+})
+
+const handleLogout = () => {
+  logout()
+}
 </script>
 
 <style>
@@ -42,6 +63,9 @@
 #app {
   font-family: Arial, sans-serif;
   min-height: 100vh;
+}
+
+#app:not(:has(.auth-container)) {
   display: flex;
   background: #f5f5f5;
 }
@@ -98,5 +122,48 @@
   width: calc(100% - 200px);
   max-width: 100%;
   box-sizing: border-box;
+}
+
+.main-content-full {
+  margin-left: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.user-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.username {
+  color: #ecf0f1;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 0.5rem;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.3s;
+}
+
+.logout-btn:hover {
+  background: #c0392b;
 }
 </style>

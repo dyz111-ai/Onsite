@@ -37,11 +37,8 @@ package-lock.json
 *.swo
 *~
 
-# 上传文件和运行时数据
+# 上传文件
 backend/uploads/
-backend/data/competitions.json
-backend/data/tasks.json
-backend/data/training_records.json
 
 # 操作系统
 .DS_Store
