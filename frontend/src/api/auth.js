@@ -62,4 +62,10 @@ export const changePassword = async (data) => {
   return response.data
 }
 
+// 管理员登录
+export const adminLogin = async (data) => {
+  const response = await api.post('/auth/admin/login', data)
+  return response.data
+}
+
 export default api

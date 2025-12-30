@@ -1,12 +1,13 @@
-import axios from 'axios'
+import api from './auth'
 
-const api = axios.create({
-  baseURL: '/api',
-  timeout: 10000
-})
-
-export const getCompetitionList = async () => {
+// 获取赛题列表
+export const getCompetitions = async () => {
   const response = await api.get('/competition/list')
   return response.data
 }
 
+// 选择测试赛题
+export const selectCompetition = async (data) => {
+  const response = await api.post('/competition/select', data)
+  return response.data
+}

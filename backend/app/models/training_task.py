@@ -21,35 +21,58 @@ class TrainingTask:
             'status': self.status,
             'train_cost': self.train_cost,
             'test_score': self.test_score,
-            'total_score': self.total_score
+            'total_score': self.total_score,
+            'competition_type': getattr(self, 'competition_type', None),
+            'competition_number': getattr(self, 'competition_number', None),
+            'render_cost': getattr(self, 'render_cost', 0.0)
         }
     
     @staticmethod
     def get_all_by_user(user_id):
-        """获取指定用户的所有训练记录"""
+        """获取指定用户的所有训练记录（包含测试赛题信息和渲染成本）"""
         try:
             with get_db_cursor(commit=False) as cursor:
                 cursor.execute(
                     """
-                    SELECT training_id, user_id, created_time, status, 
-                           train_cost, test_score, total_score
-                    FROM training_task
-                    WHERE user_id = %s
-                    ORDER BY created_time DESC
+                    SELECT 
+                        t.training_id, t.user_id, t.created_time, t.status, 
+                        t.train_cost, t.test_score, t.total_score,
+                        c.type as competition_type, c.number as competition_number,
+                        COALESCE(SUM(r.render_cost), 0) as render_cost
+                    FROM training_task t
+                    LEFT JOIN test_task tt ON t.training_id = tt.training_id
+                    LEFT JOIN competition c ON tt.competition_id = c.competition_id
+                    LEFT JOIN training_render_relation trr ON t.training_id = trr.training_id
+                    LEFT JOIN render r ON trr.render_id = r.render_id
+                    WHERE t.user_id = %s
+                    GROUP BY t.training_id, t.user_id, t.created_time, t.status, 
+                             t.train_cost, t.test_score, t.total_score,
+                             c.type, c.number
+                    ORDER BY t.created_time DESC
                     """,
                     (user_id,)
                 )
                 results = cursor.fetchall()
                 
-                return [TrainingTask(
-                    training_id=row['training_id'],
-                    user_id=row['user_id'],
-                    created_time=row['created_time'],
-                    status=row['status'],
-                    train_cost=row['train_cost'],
-                    test_score=row['test_score'],
-                    total_score=row['total_score']
-                ) for row in results]
+                records = []
+                for row in results:
+                    record = TrainingTask(
+                        training_id=row['training_id'],
+                        user_id=row['user_id'],
+                        created_time=row['created_time'],
+                        status=row['status'],
+                        train_cost=row['train_cost'],
+                        test_score=row['test_score'],
+                        total_score=row['total_score']
+                    )
+                    # 添加赛题信息
+                    record.competition_type = row['competition_type']
+                    record.competition_number = row['competition_number']
+                    # 添加渲染成本
+                    record.render_cost = float(row['render_cost']) if row['render_cost'] else 0.0
+                    records.append(record)
+                
+                return records
         except Exception as e:
             print(f"获取训练记录失败: {e}")
             return []
@@ -118,20 +141,15 @@ class TrainingTask:
         """创建新的训练记录"""
         try:
             with get_db_cursor() as cursor:
-                # 获取下一个 training_id
-                cursor.execute("SELECT COALESCE(MAX(training_id), 0) + 1 as next_id FROM training_task")
-                result = cursor.fetchone()
-                next_id = result['next_id']
-                
-                # 插入新记录，created_time 使用当前时间戳（精确到秒）
+                # 使用数据库自增 ID，不手动计算
                 cursor.execute(
                     """
                     INSERT INTO training_task 
-                    (training_id, user_id, created_time, status, train_cost, test_score, total_score)
-                    VALUES (%s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s)
+                    (user_id, created_time, status, train_cost, test_score, total_score)
+                    VALUES (%s, CURRENT_TIMESTAMP, %s, %s, %s, %s)
                     RETURNING training_id, user_id, created_time, status, train_cost, test_score, total_score
                     """,
-                    (next_id, user_id, status, train_cost, test_score, total_score)
+                    (user_id, status, train_cost, test_score, total_score)
                 )
                 row = cursor.fetchone()
                 

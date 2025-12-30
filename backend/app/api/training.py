@@ -155,3 +155,23 @@ def get_training_monitor(training_id):
         return jsonify({"data": data}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@training_bp.route('/logs/<int:training_id>', methods=['GET'])
+def get_training_logs(training_id):
+    """获取训练日志"""
+    try:
+        # 构建日志文件路径
+        cache_dir = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cache', 'train')
+        log_path = os.path.join(cache_dir, f'train{training_id}', 'train.log')
+        
+        if not os.path.exists(log_path):
+            return jsonify({"error": "日志文件不存在"}), 404
+        
+        # 读取日志内容
+        with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+            log_content = f.read()
+        
+        return jsonify({"data": log_content}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

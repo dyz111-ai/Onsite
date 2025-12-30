@@ -3,13 +3,29 @@
     <div class="auth-card">
       <h2>{{ isLogin ? '登录' : '注册' }}</h2>
       
+      <!-- 用户/管理员切换 -->
+      <div v-if="isLogin" class="role-switch">
+        <button 
+          :class="['role-btn', { active: loginRole === 'user' }]"
+          @click="loginRole = 'user'"
+        >
+          用户登录
+        </button>
+        <button 
+          :class="['role-btn', { active: loginRole === 'admin' }]"
+          @click="loginRole = 'admin'"
+        >
+          管理员登录
+        </button>
+      </div>
+      
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label>用户名</label>
+          <label>{{ loginRole === 'admin' ? '账号' : '用户名' }}</label>
           <input 
             v-model="form.username" 
             type="text" 
-            placeholder="请输入用户名"
+            :placeholder="loginRole === 'admin' ? '请输入管理员账号' : '请输入用户名'"
             required
           />
         </div>
@@ -41,7 +57,7 @@
         </button>
       </form>
 
-      <div class="switch-mode">
+      <div v-if="loginRole === 'user'" class="switch-mode">
         <span v-if="isLogin">
           还没有账号？
           <a @click="isLogin = false">立即注册</a>
@@ -58,13 +74,14 @@
 <script>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { login, register } from '../api/auth'
+import { login, register, adminLogin } from '../api/auth'
 
 export default {
   name: 'Login',
   setup() {
     const router = useRouter()
     const isLogin = ref(true)
+    const loginRole = ref('user')
     const loading = ref(false)
     const error = ref('')
     
@@ -93,24 +110,41 @@ export default {
 
       try {
         let response
-        if (isLogin.value) {
-          response = await login({
-            username: form.value.username,
+        
+        if (loginRole.value === 'admin') {
+          // 管理员登录
+          response = await adminLogin({
+            account: form.value.username,
             password: form.value.password
           })
+          
+          // 保存 token 和管理员信息
+          localStorage.setItem('token', response.token)
+          localStorage.setItem('user', JSON.stringify(response.admin))
+          
+          // 跳转到管理员页面
+          router.push('/admin')
         } else {
-          response = await register({
-            username: form.value.username,
-            password: form.value.password
-          })
+          // 用户登录/注册
+          if (isLogin.value) {
+            response = await login({
+              username: form.value.username,
+              password: form.value.password
+            })
+          } else {
+            response = await register({
+              username: form.value.username,
+              password: form.value.password
+            })
+          }
+
+          // 保存 token 和用户信息
+          localStorage.setItem('token', response.token)
+          localStorage.setItem('user', JSON.stringify(response.user))
+
+          // 跳转到比赛页面
+          router.push('/competition')
         }
-
-        // 保存 token 和用户信息
-        localStorage.setItem('token', response.token)
-        localStorage.setItem('user', JSON.stringify(response.user))
-
-        // 跳转到比赛页面
-        router.push('/competition')
       } catch (err) {
         error.value = err.response?.data?.error || '操作失败，请重试'
       } finally {
@@ -120,6 +154,7 @@ export default {
 
     return {
       isLogin,
+      loginRole,
       form,
       error,
       loading,
@@ -151,6 +186,29 @@ h2 {
   text-align: center;
   margin-bottom: 30px;
   color: #333;
+}
+
+.role-switch {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.role-btn {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 14px;
+}
+
+.role-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
 }
 
 .form-group {

@@ -1,7 +1,7 @@
 <template>
   <div id="app">
-    <!-- 只在非登录页显示侧边栏 -->
-    <nav v-if="!isLoginPage" class="sidebar">
+    <!-- 只在非登录页和非管理员页显示侧边栏 -->
+    <nav v-if="!isLoginPage && !isAdminPage" class="sidebar">
       <div class="logo">Onsite测训一体</div>
       <ul class="nav-menu">
         <li>
@@ -25,7 +25,7 @@
         <button @click="handleLogout" class="logout-btn">退出登录</button>
       </div>
     </nav>
-    <main :class="isLoginPage ? 'main-content-full' : 'main-content'">
+    <main :class="(isLoginPage || isAdminPage) ? 'main-content-full' : 'main-content'">
       <router-view />
     </main>
   </div>
@@ -40,12 +40,13 @@ const route = useRoute()
 const router = useRouter()
 
 const isLoginPage = computed(() => route.path === '/login')
-const username = ref(getCurrentUser()?.username || '未登录')
+const isAdminPage = computed(() => route.path === '/admin')
+const username = ref(getCurrentUser()?.username || getCurrentUser()?.account || '未登录')
 
 // 监听路由变化，更新用户名
 watch(() => route.path, () => {
   const user = getCurrentUser()
-  username.value = user?.username || '未登录'
+  username.value = user?.username || user?.account || '未登录'
 })
 
 const handleLogout = () => {

@@ -1,7 +1,11 @@
-
-
+nvidia-smi
+kill -9 xxx
+ps aux | grep pytho
 
 venv\Scripts\activate
 deactivate
 python -m app.main
 cd backend
+
+cd frontend
+npm run dev
