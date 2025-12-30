@@ -64,6 +64,7 @@ const handleLogout = () => {
 #app {
   font-family: Arial, sans-serif;
   min-height: 100vh;
+  width: 100%;
 }
 
 #app:not(:has(.auth-container)) {
@@ -120,7 +121,7 @@ const handleLogout = () => {
   padding: 0;
   flex: 1;
   min-height: 100vh;
-  width: calc(100% - 200px);
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }

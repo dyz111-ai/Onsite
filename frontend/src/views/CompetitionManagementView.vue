@@ -3,9 +3,9 @@
     <h1>赛题查看</h1>
     
     <!-- Add competition button -->
-    <!-- <button class="add-btn" @click="openModal">
+    <button class="add-btn" @click="openModal">
       添加新赛题
-    </button> -->
+    </button>
     
     <!-- Competition list section -->
     <div class="competition-list-container">
@@ -41,16 +41,18 @@
       <table v-if="!loading && competitions.length > 0" class="competition-table">
         <thead>
           <tr>
-            <th>题号</th>
+            <th>ID</th>
             <th>创建时间</th>
             <th>结束时间</th>
             <th>状态</th>
+            <th>类型</th>
+            <th>题号</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="comp in competitions" :key="comp.id">
-            <td>{{ comp.number }}</td>
+            <td>{{ comp.id }}</td>
             <td>{{ formatDate(comp.created_time) }}</td>
             <td>{{ formatDate(comp.end_time) }}</td>
             <td>
@@ -58,10 +60,10 @@
                 {{ formatStatus(comp.status) }}
               </span>
             </td>
+            <td>{{ comp.type }}</td>
+            <td>{{ comp.number }}</td>
             <td>
-              <button class="preview-btn" @click="previewVideo(comp)">预览</button>
-              <button class="download-btn" @click="downloadFile(comp, 'OpenSCENARIO')">下载OpenSCENARIO</button>
-              <button class="download-btn" @click="downloadFile(comp, 'destination')">下载Destination</button>
+              <button class="view-btn" @click="viewCompetition(comp)">查看详情</button>
             </td>
           </tr>
         </tbody>
@@ -92,22 +94,6 @@
       </div>
     </div>
     
-    <!-- Video preview modal -->
-    <div v-if="showVideoModal" class="modal-overlay" @click="closeVideoModal">
-      <div class="video-modal-content" @click.stop>
-        <div class="video-modal-header">
-          <h3>赛题预览 - 题号 {{ currentCompetition.number }}</h3>
-          <button class="close-btn" @click="closeVideoModal">×</button>
-        </div>
-        <div class="video-container">
-          <VideoComponent 
-            :taskId="currentCompetition.id.toString()" 
-            taskType="competition" 
-          />
-        </div>
-      </div>
-    </div>
-    
     <!-- Competition modal -->
     <div v-if="showModal" class="modal-overlay" @click="closeModal">
       <div class="modal-content" @click.stop>
@@ -128,13 +114,11 @@
 
 <script>
 import CompetitionAddingComponent from '../components/CompetitionAddingComponent.vue';
-import VideoComponent from '../components/VideoComponent.vue'; // 导入视频组件
 
 export default {
   name: 'CompetitionView',
   components: {
-    CompetitionAddingComponent,
-    VideoComponent // 注册视频组件
+    CompetitionAddingComponent
   },
   data() {
     return {
@@ -149,10 +133,7 @@ export default {
       // For viewing competition details
       selectedCompetition: null,
       // New property for list type selection
-      selectedListType: '',
-      // For video preview
-      showVideoModal: false,
-      currentCompetition: null
+      selectedListType: ''
     }
   },
   computed: {
@@ -235,7 +216,8 @@ export default {
     formatStatus(status) {
       const statusMap = {
         'Unreleased': '未发布',
-        'Published': '已发布'
+        'Ongoing': '进行中',
+        'Completed': '已完成'
       };
       return statusMap[status] || status;
     },
@@ -243,55 +225,15 @@ export default {
     statusClass(status) {
       return {
         'status-unreleased': status === 'Unreleased',
-        'status-published': status === 'Published'
+        'status-ongoing': status === 'Ongoing',
+        'status-completed': status === 'Completed'
       };
-    },
-
-
-    // 修改：下载文件方法 - 直接从前端下载
-    downloadFile(competition, fileType) {
-      let fileExtension = '';
-      let fileName = '';
-      
-      // 根据文件类型确定扩展名
-      if (fileType === 'OpenSCENARIO') {
-        fileExtension = '.xosc';
-        fileName = `competition_${competition.id}_OpenSCENARIO`;
-      } else if (fileType === 'destination') {
-        fileExtension = '.json';
-        fileName = `competition_${competition.id}_destination`;
-      } else {
-        alert('不支持的文件类型');
-        return;
-      }
-      
-      // 构建前端文件路径 - 直接访问public目录下的文件
-      const downloadUrl = `/cache/competition/${fileType}/${competition.id}${fileExtension}`;
-      
-      // 创建一个临时的a标签用于下载
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `${fileName}${fileExtension}`;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     },
     
     viewCompetition(competition) {
       this.selectedCompetition = competition;
       // In a real implementation, you might open a detail modal or navigate to a detail page
       alert(`查看赛题详情: ${competition.type} - ${competition.number}`);
-    },
-    
-    previewVideo(competition) {
-      this.currentCompetition = competition;
-      this.showVideoModal = true;
-    },
-    
-    closeVideoModal() {
-      this.showVideoModal = false;
-      this.currentCompetition = null;
     },
     
     openModal() {
@@ -364,54 +306,6 @@ h1 {
   border-radius: 8px;
   width: 400px;
   max-width: 90%;
-}
-
-.video-modal-content {
-  background-color: white;
-  padding: 1rem;
-  border-radius: 8px;
-  width: 80%;
-  max-width: 900px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.video-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 1rem;
-}
-
-.video-modal-header h3 {
-  margin: 0;
-  font-size: 1.2rem;
-}
-
-.close-btn {
-  font-size: 1.5rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #999;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-btn:hover {
-  color: #333;
-}
-
-.video-container {
-  flex: 1;
-  overflow-y: auto;
 }
 
 .form-group {
@@ -593,31 +487,27 @@ select, input {
   color: #e65100;
 }
 
-.status-published {
+.status-ongoing {
   background-color: #e3f2fd;
   color: #0d47a1;
 }
 
-.view-btn, .preview-btn, .download-btn {
+.status-completed {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+.view-btn {
   background: #2196F3;
   color: white;
   border: none;
   padding: 0.4rem 0.8rem;
   border-radius: 4px;
   cursor: pointer;
-  margin-right: 0.5rem;
 }
 
-.view-btn:hover, .preview-btn:hover {
+.view-btn:hover {
   background: #0b7dda;
-}
-
-.preview-btn {
-  background: #4CAF50;
-}
-
-.preview-btn:hover {
-  background: #45a049;
 }
 
 .empty-state {
