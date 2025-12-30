@@ -3,10 +3,10 @@ from app.models.train_competition import Competition
 from app.models.test_task import TestTask
 from app.utils.jwt_utils import token_required
 
-competition_bp = Blueprint('competition', __name__, url_prefix='/api/competition')
+train_competition_bp = Blueprint('train_competition', __name__, url_prefix='/api/competition')
 
 
-@competition_bp.route('/list', methods=['GET'])
+@train_competition_bp.route('/list', methods=['GET'])
 @token_required
 def get_competitions(current_user_id):
     """获取所有赛题列表"""
@@ -19,7 +19,7 @@ def get_competitions(current_user_id):
         return jsonify({'error': f'获取赛题列表失败: {str(e)}'}), 500
 
 
-@competition_bp.route('/select', methods=['POST'])
+@train_competition_bp.route('/select', methods=['POST'])
 @token_required
 def select_competition(current_user_id):
     """选择测试赛题"""

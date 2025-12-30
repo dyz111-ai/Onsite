@@ -249,9 +249,16 @@ class TrainingTask:
     
     @staticmethod
     def delete(training_id):
-        """删除训练记录"""
+        """删除训练记录（级联删除关联的 training_render_relation 和 test_task）"""
         try:
             with get_db_cursor() as cursor:
+                # 先删除 training_render_relation 中的关联记录
+                cursor.execute("DELETE FROM training_render_relation WHERE training_id = %s", (training_id,))
+                
+                # 删除 test_task 中的关联记录
+                cursor.execute("DELETE FROM test_task WHERE training_id = %s", (training_id,))
+                
+                # 最后删除训练记录本身
                 cursor.execute("DELETE FROM training_task WHERE training_id = %s", (training_id,))
         except Exception as e:
             print(f"删除训练记录失败: {e}")

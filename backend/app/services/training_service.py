@@ -91,7 +91,7 @@ class TrainingService:
             
             if os.path.exists(csv_path):
                 cost = TrainingTask.update_cost_from_csv(training_id, csv_path)
-                socketio.emit('training_log', {'message': f'训练成本已计算: {cost} 元', 'training_id': training_id})
+                socketio.emit('training_log', {'message': f'训练成本已计算: {cost} ', 'training_id': training_id})
             else:
                 socketio.emit('training_log', {'message': f'警告: 未找到资源使用数据文件 {csv_path}', 'training_id': training_id})
         except Exception as e:

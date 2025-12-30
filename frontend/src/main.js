@@ -4,7 +4,6 @@ import App from './App.vue'
 import Login from './views/Login.vue'
 import CompetitionView from './views/CompetitionView.vue'
 import TrainingView from './views/TrainingView.vue'
-import ResultView from './views/ResultView.vue'
 import TaskSubmitView from './views/TaskSubmitView.vue'
 import EvaluationView from './views/EvaluationView.vue'
 import AdminView from './views/AdminView.vue'
@@ -15,7 +14,6 @@ const routes = [
   { path: '/', redirect: '/login' },
   { path: '/competition', component: CompetitionView, meta: { requiresAuth: true, role: 'user' } },
   { path: '/training', component: TrainingView, meta: { requiresAuth: true, role: 'user' } },
-  { path: '/result', component: ResultView, meta: { requiresAuth: true, role: 'user' } },
   { path: '/task-submit', component: TaskSubmitView, meta: { requiresAuth: true, role: 'user' } },
   { path: '/evaluation', component: EvaluationView, meta: { requiresAuth: true, role: 'user' } },
   { path: '/admin', component: AdminView, meta: { requiresAuth: true, role: 'admin' } },

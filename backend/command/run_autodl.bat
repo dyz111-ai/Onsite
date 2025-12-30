@@ -14,7 +14,11 @@ set TRAIN_FOLDER=train%TRAINING_ID%
 
 set SCRIPT_DIR=%~dp0
 set RESULT_DIR=%SCRIPT_DIR%..\..\cache\train
-
+REM 检查cache\train目录是否存在，不存在则创建
+if not exist "%RESULT_DIR%" (
+    echo Creating directory: %RESULT_DIR%
+    mkdir "%RESULT_DIR%"
+)
 echo ==== DEBUG START ====
 whoami
 echo USERPROFILE=%USERPROFILE%

@@ -2,7 +2,17 @@ import os
 from datetime import timedelta
 
 class Config:
+    """应用配置类"""
+    
+    # Flask 基础配置
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
+    
     # JWT 配置
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'your-secret-key-change-in-production'
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'jwt-secret-key-change-in-production'
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)  # Token 有效期 24 小时
+    
+    # 数据库配置（如果需要）
+    # DATABASE_URL = os.environ.get('DATABASE_URL') or 'postgresql://user:password@localhost/dbname'
+    
+    # 其他配置
+    DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
