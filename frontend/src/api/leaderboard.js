@@ -34,11 +34,29 @@ api.interceptors.response.use(
 )
 
 /**
- * 获取排行榜数据
- * @returns {Promise} - 排行榜数据
+ * 获取总分排行榜数据
+ * @returns {Promise} - 总分排行榜数据
  */
 export const getLeaderboardData = async () => {
   const response = await api.get('/leaderboard/list')
+  return response.data
+}
+
+/**
+ * 获取成本排行榜数据
+ * @returns {Promise} - 成本排行榜数据
+ */
+export const getCostLeaderboardData = async () => {
+  const response = await api.get('/leaderboard/cost')
+  return response.data
+}
+
+/**
+ * 获取测试分数排行榜数据
+ * @returns {Promise} - 测试分数排行榜数据
+ */
+export const getTestScoreLeaderboardData = async () => {
+  const response = await api.get('/leaderboard/test_score')
   return response.data
 }
 

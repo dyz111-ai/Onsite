@@ -8,11 +8,11 @@ leaderboard_bp = Blueprint('leaderboard', __name__, url_prefix='/api/leaderboard
 @token_required
 def get_leaderboard(current_user_id):
     """
-    获取排行榜数据
+    获取总分排行榜数据
     权限：需要登录
     """
     try:
-        # 获取排行榜数据
+        # 获取总分排行榜数据
         leaderboard_data = TrainingTask.get_leaderboard()
         
         # 格式化响应数据
@@ -27,12 +27,72 @@ def get_leaderboard(current_user_id):
             })
         
         return jsonify({
-            'message': '获取排行榜成功',
+            'message': '获取总分排行榜成功',
             'data': formatted_data
         }), 200
         
     except Exception as e:
-        return jsonify({'error': f'获取排行榜失败: {str(e)}'}), 500
+        return jsonify({'error': f'获取总分排行榜失败: {str(e)}'}), 500
+
+@leaderboard_bp.route('/cost', methods=['GET'])
+@token_required
+def get_cost_leaderboard(current_user_id):
+    """
+    获取训练成本排行榜数据
+    权限：需要登录
+    """
+    try:
+        # 获取成本排行榜数据
+        leaderboard_data = TrainingTask.get_leaderboard_by_cost()
+        
+        # 格式化响应数据
+        formatted_data = []
+        for item in leaderboard_data:
+            formatted_data.append({
+                'rank': item['global_rank'],
+                'user_id': item['user_id'],
+                'account': item['account'],
+                'cost': item['min_cost'] if item['min_cost'] == '无穷大' else float(item['min_cost']),
+                'created_time': item['created_time'].strftime('%Y-%m-%d %H:%M:%S') if item['created_time'] else None
+            })
+        
+        return jsonify({
+            'message': '获取成本排行榜成功',
+            'data': formatted_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'获取成本排行榜失败: {str(e)}'}), 500
+
+@leaderboard_bp.route('/test_score', methods=['GET'])
+@token_required
+def get_test_score_leaderboard(current_user_id):
+    """
+    获取测试分数排行榜数据
+    权限：需要登录
+    """
+    try:
+        # 获取测试分数排行榜数据
+        leaderboard_data = TrainingTask.get_leaderboard_by_test_score()
+        
+        # 格式化响应数据
+        formatted_data = []
+        for item in leaderboard_data:
+            formatted_data.append({
+                'rank': item['global_rank'],
+                'user_id': item['user_id'],
+                'account': item['account'],
+                'test_score': float(item['max_test_score']),
+                'created_time': item['created_time'].strftime('%Y-%m-%d %H:%M:%S') if item['created_time'] else None
+            })
+        
+        return jsonify({
+            'message': '获取测试分数排行榜成功',
+            'data': formatted_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'获取测试分数排行榜失败: {str(e)}'}), 500
 
 @leaderboard_bp.route('/user/best', methods=['GET'])
 @token_required

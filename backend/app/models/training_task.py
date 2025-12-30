@@ -260,7 +260,7 @@ class TrainingTask:
     @staticmethod
     def get_leaderboard():
         """
-        获取排行榜数据
+        获取总分排行榜数据
         逻辑：找到每个参赛选手的最高分数记录，按分数排序
         注意：所有参赛选手都要显示，没有训练任务的选手分数记为0，排在最后
         """
@@ -317,7 +317,142 @@ class TrainingTask:
                 
                 return results
         except Exception as e:
-            print(f"获取排行榜数据失败: {e}")
+            print(f"获取总分排行榜数据失败: {e}")
+            raise e
+    
+    @staticmethod
+    def get_leaderboard_by_cost():
+        """
+        获取训练成本排行榜数据
+        逻辑：找到每个参赛选手的最低成本记录，按成本排序（越低越好）
+        注意：所有参赛选手都要显示，0或NULL的成本视为无穷大，排在最后
+        """
+        try:
+            with get_db_cursor(commit=False) as cursor:
+                # 查询每个参赛选手的最低成本记录，包括没有训练任务的选手
+                # 使用窗口函数ROW_NUMBER()来获取每个用户的最低成本记录
+                # 成本相同时按创建时间排序，还相同按user_id排序
+                query = """
+                WITH all_participants AS (
+                    SELECT participant_id as user_id, account FROM participant
+                ),
+                ranked_tasks AS (
+                    SELECT 
+                        p.user_id,
+                        p.account,
+                        t.training_id,
+                        t.created_time,
+                        t.train_cost,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY p.user_id 
+                            ORDER BY 
+                                CASE 
+                                    WHEN t.train_cost IS NULL OR t.train_cost = 0 THEN 1 ELSE 0 END ASC,
+                                t.train_cost ASC,
+                                t.created_time DESC,
+                                p.account ASC
+                        ) as rank_within_user,
+                        CASE WHEN t.training_id IS NOT NULL THEN 1 ELSE 0 END as has_training_data
+                    FROM all_participants p
+                    LEFT JOIN training_task t ON p.user_id = t.user_id
+                )
+                SELECT 
+                    ROW_NUMBER() OVER (
+                        ORDER BY 
+                            rt.has_training_data DESC,
+                            CASE 
+                                WHEN rt.train_cost IS NULL OR rt.train_cost = 0 THEN 1 ELSE 0 END ASC,
+                            rt.train_cost ASC,
+                            rt.created_time DESC,
+                            rt.account ASC
+                    ) as global_rank,
+                    rt.user_id,
+                    rt.account,
+                    CASE 
+                        WHEN rt.train_cost IS NULL OR rt.train_cost = 0 THEN '无穷大' 
+                        ELSE rt.train_cost::TEXT 
+                    END as min_cost,
+                    rt.created_time
+                FROM ranked_tasks rt
+                WHERE rt.rank_within_user = 1
+                ORDER BY 
+                    rt.has_training_data DESC,
+                    CASE 
+                        WHEN rt.train_cost IS NULL OR rt.train_cost = 0 THEN 1 ELSE 0 END ASC,
+                    rt.train_cost ASC,
+                    rt.created_time DESC,
+                    rt.account ASC
+                """
+                
+                cursor.execute(query)
+                results = cursor.fetchall()
+                
+                return results
+        except Exception as e:
+            print(f"获取成本排行榜数据失败: {e}")
+            raise e
+    
+    @staticmethod
+    def get_leaderboard_by_test_score():
+        """
+        获取测试分数排行榜数据
+        逻辑：找到每个参赛选手的最高测试分数记录，按分数排序（越高越好）
+        注意：所有参赛选手都要显示，没有训练任务的选手测试分数记为0，排在最后
+        """
+        try:
+            with get_db_cursor(commit=False) as cursor:
+                # 查询每个参赛选手的最高测试分数记录，包括没有训练任务的选手
+                # 使用窗口函数ROW_NUMBER()来获取每个用户的最高测试分数记录
+                # 分数相同时按创建时间排序，还相同按user_id排序
+                query = """
+                WITH all_participants AS (
+                    SELECT participant_id as user_id, account FROM participant
+                ),
+                ranked_tasks AS (
+                    SELECT 
+                        p.user_id,
+                        p.account,
+                        t.training_id,
+                        t.created_time,
+                        t.test_score,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY p.user_id 
+                            ORDER BY 
+                                COALESCE(t.test_score, 0) DESC,
+                                t.created_time DESC,
+                                p.account ASC
+                        ) as rank_within_user,
+                        CASE WHEN t.training_id IS NOT NULL THEN 1 ELSE 0 END as has_training_data
+                    FROM all_participants p
+                    LEFT JOIN training_task t ON p.user_id = t.user_id
+                )
+                SELECT 
+                    ROW_NUMBER() OVER (
+                        ORDER BY 
+                            rt.has_training_data DESC,
+                            COALESCE(rt.test_score, 0) DESC,
+                            rt.created_time DESC,
+                            rt.account ASC
+                    ) as global_rank,
+                    rt.user_id,
+                    rt.account,
+                    COALESCE(rt.test_score, 0) as max_test_score,
+                    rt.created_time
+                FROM ranked_tasks rt
+                WHERE rt.rank_within_user = 1
+                ORDER BY 
+                    rt.has_training_data DESC,
+                    max_test_score DESC,
+                    rt.created_time DESC,
+                    rt.account ASC
+                """
+                
+                cursor.execute(query)
+                results = cursor.fetchall()
+                
+                return results
+        except Exception as e:
+            print(f"获取测试分数排行榜数据失败: {e}")
             raise e
     
     @staticmethod
