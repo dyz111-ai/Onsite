@@ -8,6 +8,7 @@ import ResultView from './views/ResultView.vue'
 import TaskSubmitView from './views/TaskSubmitView.vue'
 import EvaluationView from './views/EvaluationView.vue'
 import AdminView from './views/AdminView.vue'
+import LeaderboardView from './views/LeaderboardView.vue'
 
 const routes = [
   { path: '/login', component: Login },
@@ -17,7 +18,8 @@ const routes = [
   { path: '/result', component: ResultView, meta: { requiresAuth: true, role: 'user' } },
   { path: '/task-submit', component: TaskSubmitView, meta: { requiresAuth: true, role: 'user' } },
   { path: '/evaluation', component: EvaluationView, meta: { requiresAuth: true, role: 'user' } },
-  { path: '/admin', component: AdminView, meta: { requiresAuth: true, role: 'admin' } }
+  { path: '/admin', component: AdminView, meta: { requiresAuth: true, role: 'admin' } },
+  { path: '/leaderboard', component: LeaderboardView, meta: { requiresAuth: true } }
 ]
 
 const router = createRouter({

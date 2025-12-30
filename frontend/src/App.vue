@@ -19,6 +19,9 @@
         <li>
           <router-link to="/result" class="nav-item">结果展示</router-link>
         </li>
+        <li>
+          <router-link to="/leaderboard" class="nav-item">排行榜</router-link>
+        </li>
       </ul>
       <div class="user-info">
         <div class="username">{{ username }}</div>
