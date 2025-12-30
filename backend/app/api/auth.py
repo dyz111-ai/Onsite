@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app.models.user import User
+from app.models.admin import Admin
 from app.utils.jwt_utils import create_token, token_required
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
@@ -144,3 +145,44 @@ def change_password(current_user_id):
         
     except Exception as e:
         return jsonify({'error': f'修改密码失败: {str(e)}'}), 500
+
+@auth_bp.route('/admin/login', methods=['POST'])
+def admin_login():
+    """管理员登录"""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': '请求数据为空'}), 400
+        
+        account = data.get('account', '').strip()
+        password = data.get('password', '')
+        
+        # 验证必填字段
+        if not account or not password:
+            return jsonify({'error': '账号和密码不能为空'}), 400
+        
+        # 查找管理员
+        admin = Admin.get_by_account(account)
+        if not admin:
+            return jsonify({'error': '账号或密码错误'}), 401
+        
+        # 验证密码
+        if not admin.verify_password(password):
+            return jsonify({'error': '账号或密码错误'}), 401
+        
+        # 生成 token，包含角色信息
+        token = create_token(admin.admin_id, role='admin')
+        
+        return jsonify({
+            'message': '登录成功',
+            'token': token,
+            'admin': {
+                'admin_id': admin.admin_id,
+                'account': admin.account,
+                'role': 'admin'
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'登录失败: {str(e)}'}), 500

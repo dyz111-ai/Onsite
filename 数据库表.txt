@@ -51,7 +51,7 @@
   status               character varying    NOT NULL
   created_time         date                 NOT NULL
   render_cost          double precision     NOT NULL
-
+  name                 text
 表: test_task
 ------------------------------
   training_id          integer              NOT NULL

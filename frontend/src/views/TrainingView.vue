@@ -1,10 +1,24 @@
 <template>
   <div class="training-view">
     <h2>训练</h2>
-    <div class="control-panel">
-      <button @click="showCreateDialog" class="create-btn">
-        新增训练
-      </button>
+    
+    <button @click="showCreateDialog" class="create-btn">
+      新增训练
+    </button>
+    
+    <div class="filter-group">
+      <select v-model="filterStatus" class="filter-select">
+        <option value="">全部状态</option>
+        <option value="Training">训练中</option>
+        <option value="Trained">训练完成</option>
+      </select>
+      
+      <select v-model="filterTime" class="filter-select">
+        <option value="">全部时间</option>
+        <option value="today">今天</option>
+        <option value="week">最近7天</option>
+        <option value="month">最近30天</option>
+      </select>
     </div>
 
     <div v-if="message" :class="['message', messageType]">
@@ -18,11 +32,11 @@
     </div>
 
     <!-- 训练记录列表 -->
-    <div v-else-if="trainingRecords.length > 0" class="records-section">
-      <h3>训练记录</h3>
+    <div v-else-if="filteredRecords.length > 0" class="records-section">
+      <h3>训练记录 ({{ filteredRecords.length }})</h3>
       <div class="records-container">
         <div class="records-list">
-          <div v-for="record in trainingRecords" :key="record.id" class="record-card">
+          <div v-for="record in filteredRecords" :key="record.id" class="record-card">
             <div class="record-header">
               <div class="record-info">
                 <div class="record-field">
@@ -32,7 +46,10 @@
                   <strong>创建时间：</strong>{{ record.createdAt }}
                 </div>
                 <div class="record-field">
-                  <strong>状态：</strong>{{ record.status }}
+                  <strong>状态：</strong>
+                  <span :class="['status-badge', getStatusClass(record.status)]">
+                    {{ getStatusText(record.status) }}
+                  </span>
                 </div>
                 <div class="record-field">
                   <strong>训练成本：</strong>{{ record.train_cost }}
@@ -42,8 +59,14 @@
                 </div>
               </div>
               <div class="record-actions">
+                <button @click="viewDatasets(record.training_id)" class="dataset-btn">
+                  数据集信息
+                </button>
                 <button @click="viewMonitor(record.training_id)" class="monitor-btn">
                   查看监控
+                </button>
+                <button @click="viewTrainingLog(record.training_id)" class="log-btn">
+                  查看日志
                 </button>
                 <button @click="deleteRecord(record.id)" class="delete-btn">
                   删除
@@ -51,12 +74,12 @@
               </div>
             </div>
             
-            <!-- 训练日志 -->
-            <div v-if="record.logs && record.logs.length > 0" class="log-section">
+            <!-- 实时训练日志（仅训练中显示） -->
+            <div v-if="record.logs && record.logs.length > 0 && record.status === 'Training'" class="log-section">
               <div class="log-header">
-                <h4>执行日志</h4>
+                <h4>执行进度</h4>
                 <button @click="toggleLogs(record.training_id)" class="toggle-logs-btn">
-                  {{ record.showLogs ? '隐藏日志' : '显示日志' }}
+                  {{ record.showLogs ? '隐藏' : '显示' }}
                 </button>
               </div>
               <div v-if="record.showLogs" class="log-container" :ref="el => setLogRef(record.training_id, el)">
@@ -70,19 +93,46 @@
       </div>
     </div>
 
+    <!-- 无筛选结果 -->
+    <div v-else-if="!loading && trainingRecords.length > 0 && filteredRecords.length === 0" class="no-data">
+      没有符合条件的训练记录
+    </div>
+
     <!-- 新增训练弹窗 -->
     <div v-if="showDialog" class="dialog-overlay" @click="closeDialog">
-      <div class="dialog-content" @click.stop>
+      <div class="dialog-content create-dialog" @click.stop>
         <div class="dialog-header">
           <h3>新增训练</h3>
           <button class="close-btn" @click="closeDialog">×</button>
         </div>
         <div class="dialog-body">
-          <!-- 弹窗内容留白 -->
+          <div v-if="renderLoading" class="loading">加载数据集中...</div>
+          <div v-else-if="renderRecords.length === 0" class="no-data">暂无可用数据集</div>
+          <div v-else class="render-selection">
+            <h4>选择数据集</h4>
+            <div class="render-list">
+              <div v-for="render in renderRecords" :key="render.render_id" class="render-item">
+                <label class="render-checkbox">
+                  <input 
+                    type="checkbox" 
+                    :value="render.render_id" 
+                    v-model="selectedRenderIds"
+                  />
+                  <div class="render-info">
+                    <div><strong>名称：</strong>{{ render.name || '未命名' }}</div>
+                    <div><strong>状态：</strong>{{ render.status }}</div>
+                    <div><strong>创建时间：</strong>{{ render.created_time }}</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="dialog-footer">
           <button @click="closeDialog" class="cancel-btn">取消</button>
-          <button @click="createTraining" class="confirm-btn">确定</button>
+          <button @click="createTraining" class="confirm-btn" :disabled="selectedRenderIds.length === 0">
+            确定 (已选 {{ selectedRenderIds.length }})
+          </button>
         </div>
       </div>
     </div>
@@ -119,11 +169,55 @@
         </div>
       </div>
     </div>
+
+    <!-- 训练日志弹窗 -->
+    <div v-if="showLogDialog" class="dialog-overlay" @click="closeLogDialog">
+      <div class="dialog-content log-dialog" @click.stop>
+        <div class="dialog-header">
+          <h3>训练日志 - ID: {{ currentLogId }}</h3>
+          <div class="header-actions">
+            <button v-if="!logLoading && !logError" @click="downloadLog" class="download-btn">
+              下载日志
+            </button>
+            <button class="close-btn" @click="closeLogDialog">×</button>
+          </div>
+        </div>
+        <div class="dialog-body">
+          <div v-if="logLoading" class="loading">加载中...</div>
+          <div v-else-if="logError" class="error-message">{{ logError }}</div>
+          <div v-else class="log-content">
+            <pre>{{ logContent }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据集信息弹窗 -->
+    <div v-if="showDatasetDialog" class="dialog-overlay" @click="closeDatasetDialog">
+      <div class="dialog-content dataset-dialog" @click.stop>
+        <div class="dialog-header">
+          <h3>数据集信息 - 训练ID: {{ currentDatasetTrainingId }}</h3>
+          <button class="close-btn" @click="closeDatasetDialog">×</button>
+        </div>
+        <div class="dialog-body">
+          <div v-if="datasetLoading" class="loading">加载中...</div>
+          <div v-else-if="datasetError" class="error-message">{{ datasetError }}</div>
+          <div v-else-if="datasetRecords.length === 0" class="no-data">该训练未关联数据集</div>
+          <div v-else class="dataset-list">
+            <div v-for="dataset in datasetRecords" :key="dataset.render_id" class="dataset-item">
+              <div class="dataset-field"><strong>名称：</strong>{{ dataset.name || '未命名' }}</div>
+              <div class="dataset-field"><strong>状态：</strong>{{ dataset.status }}</div>
+              <div class="dataset-field"><strong>创建时间：</strong>{{ dataset.created_time }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { startTraining, getTrainingResult } from '../api/training'
 import { getTrainingRecords, createTrainingRecord, updateTrainingRecord, deleteTrainingRecord } from '../api/trainingRecords'
 import { io } from 'socket.io-client'
@@ -138,8 +232,53 @@ const showDialog = ref(false)
 const trainingRecords = ref([])
 const loading = ref(true)
 const logRefs = ref({})
+
+// 渲染数据集相关
+const renderRecords = ref([])
+const renderLoading = ref(false)
+const selectedRenderIds = ref([])
+
+// 数据集信息弹窗
+const showDatasetDialog = ref(false)
+const currentDatasetTrainingId = ref(null)
+const datasetRecords = ref([])
+const datasetLoading = ref(false)
+const datasetError = ref('')
+const filterStatus = ref('')
+const filterTime = ref('')
 let socket = null
-let currentTrainingId = null
+// 使用 Set 追踪所有正在训练的 ID，支持并发
+const activeTrainingIds = new Set()
+
+// 筛选后的记录
+const filteredRecords = computed(() => {
+  let records = trainingRecords.value
+  
+  // 按状态筛选
+  if (filterStatus.value) {
+    records = records.filter(r => r.status === filterStatus.value)
+  }
+  
+  // 按时间筛选
+  if (filterTime.value) {
+    const now = new Date()
+    records = records.filter(r => {
+      const createdTime = new Date(r.created_time || r.createdAt)
+      const diffDays = Math.floor((now - createdTime) / (1000 * 60 * 60 * 24))
+      
+      if (filterTime.value === 'today') {
+        return diffDays === 0
+      } else if (filterTime.value === 'week') {
+        return diffDays <= 7
+      } else if (filterTime.value === 'month') {
+        return diffDays <= 30
+      }
+      return true
+    })
+  }
+  
+  return records
+})
 
 const showMonitorDialog = ref(false)
 const currentMonitorId = ref(null)
@@ -152,6 +291,12 @@ const memoryChart = ref(null)
 let cpuChartInstance = null
 let gpuChartInstance = null
 let memoryChartInstance = null
+
+const showLogDialog = ref(false)
+const currentLogId = ref(null)
+const logContent = ref('')
+const logLoading = ref(false)
+const logError = ref('')
 
 const setLogRef = (id, el) => {
   if (el) {
@@ -184,18 +329,52 @@ const loadTrainingRecords = async () => {
   loading.value = true
   try {
     const result = await getTrainingRecords()
-    // 为每条记录添加日志数组和显示状态
-    trainingRecords.value = (result.data || []).map(record => ({
-      ...record,
-      logs: record.logs || [],
-      showLogs: false
-    }))
+    
+    // 保存旧记录的日志和展开状态
+    const oldRecordsMap = {}
+    trainingRecords.value.forEach(record => {
+      oldRecordsMap[record.training_id] = {
+        logs: record.logs || [],
+        showLogs: record.showLogs || false
+      }
+    })
+    
+    // 为每条记录添加日志数组和显示状态，保留已有的日志
+    trainingRecords.value = (result.data || []).map(record => {
+      const oldRecord = oldRecordsMap[record.training_id]
+      return {
+        ...record,
+        logs: oldRecord ? oldRecord.logs : [],
+        showLogs: oldRecord ? oldRecord.showLogs : false
+      }
+    })
   } catch (error) {
     message.value = '加载训练记录失败：' + (error.response?.data?.error || error.message)
     messageType.value = 'error'
     trainingRecords.value = []
   } finally {
     loading.value = false
+  }
+}
+
+// 刷新单条训练记录
+const refreshSingleRecord = async (trainingId) => {
+  try {
+    const response = await axios.get(`/api/training/records/${trainingId}`)
+    const updatedRecord = response.data.data
+    
+    // 找到对应的记录并更新，保留日志和展开状态
+    const index = trainingRecords.value.findIndex(r => r.training_id === trainingId)
+    if (index !== -1) {
+      const oldRecord = trainingRecords.value[index]
+      trainingRecords.value[index] = {
+        ...updatedRecord,
+        logs: oldRecord.logs || [],
+        showLogs: oldRecord.showLogs || false
+      }
+    }
+  } catch (error) {
+    console.error('刷新训练记录失败:', error)
   }
 }
 
@@ -208,8 +387,24 @@ const saveRecordUpdate = async (recordId, updateData) => {
   }
 }
 
-const showCreateDialog = () => {
+const showCreateDialog = async () => {
   showDialog.value = true
+  selectedRenderIds.value = []
+  
+  // 加载渲染数据集
+  renderLoading.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const response = await axios.get('/api/render/records', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    renderRecords.value = response.data.data
+  } catch (error) {
+    console.error('加载渲染数据集失败:', error)
+    renderRecords.value = []
+  } finally {
+    renderLoading.value = false
+  }
 }
 
 const closeDialog = () => {
@@ -222,11 +417,28 @@ const createTraining = async () => {
     const result = await createTrainingRecord()
     const trainingId = result.data.training_id
     
-    // 设置当前训练ID
-    currentTrainingId = trainingId
+    // 创建训练和渲染的关联
+    if (selectedRenderIds.value.length > 0) {
+      try {
+        await axios.post(`/api/render/training/${trainingId}/relation`, {
+          render_ids: selectedRenderIds.value
+        })
+      } catch (error) {
+        console.error('创建数据集关联失败:', error)
+      }
+    }
     
-    // 重新加载记录列表
-    await loadTrainingRecords()
+    // 添加到活跃训练集合
+    activeTrainingIds.add(trainingId)
+    
+    // 直接添加新记录到列表顶部，不重新加载全部
+    const newRecord = {
+      ...result.data,
+      logs: [],
+      showLogs: false
+    }
+    trainingRecords.value.unshift(newRecord)
+    
     closeDialog()
     
     message.value = `训练记录已创建 (ID: ${trainingId})，正在启动训练...`
@@ -240,7 +452,8 @@ const createTraining = async () => {
     } catch (error) {
       message.value = '启动训练失败：' + (error.response?.data?.error || error.message)
       messageType.value = 'error'
-      currentTrainingId = null
+      // 启动失败，从活跃集合中移除
+      activeTrainingIds.delete(trainingId)
     }
   } catch (error) {
     message.value = '创建训练记录失败：' + (error.response?.data?.error || error.message)
@@ -411,6 +624,95 @@ const closeMonitorDialog = () => {
   if (memoryChartInstance) memoryChartInstance.destroy()
 }
 
+const viewTrainingLog = async (trainingId) => {
+  currentLogId.value = trainingId
+  logError.value = ''
+  logContent.value = ''
+  showLogDialog.value = true
+  logLoading.value = true
+  
+  try {
+    const response = await axios.get(`/api/training/logs/${trainingId}`)
+    logContent.value = response.data.data
+    logLoading.value = false
+  } catch (error) {
+    console.error('加载训练日志失败:', error)
+    logError.value = error.response?.data?.error || '加载训练日志失败'
+    logLoading.value = false
+  }
+}
+
+const closeLogDialog = () => {
+  showLogDialog.value = false
+  logContent.value = ''
+  currentLogId.value = null
+}
+
+const downloadLog = () => {
+  if (!logContent.value) return
+  
+  // 创建 Blob 对象
+  const blob = new Blob([logContent.value], { type: 'text/plain;charset=utf-8' })
+  
+  // 创建下载链接
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `train${currentLogId.value}_log.txt`
+  
+  // 触发下载
+  document.body.appendChild(link)
+  link.click()
+  
+  // 清理
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
+}
+
+const viewDatasets = async (trainingId) => {
+  currentDatasetTrainingId.value = trainingId
+  datasetError.value = ''
+  datasetRecords.value = []
+  showDatasetDialog.value = true
+  datasetLoading.value = true
+  
+  try {
+    const response = await axios.get(`/api/render/training/${trainingId}`)
+    datasetRecords.value = response.data.data
+    datasetLoading.value = false
+  } catch (error) {
+    console.error('加载数据集信息失败:', error)
+    datasetError.value = error.response?.data?.error || '加载数据集信息失败'
+    datasetLoading.value = false
+  }
+}
+
+const closeDatasetDialog = () => {
+  showDatasetDialog.value = false
+  datasetRecords.value = []
+  currentDatasetTrainingId.value = null
+}
+
+const getStatusClass = (status) => {
+  const statusMap = {
+    'Training': 'status-training',
+    'Trained': 'status-trained',
+    'Testing': 'status-testing',
+    'Tested': 'status-tested'
+  }
+  return statusMap[status] || 'status-default'
+}
+
+const getStatusText = (status) => {
+  const textMap = {
+    'Training': '训练中',
+    'Trained': '训练完成',
+    'Testing': '测试中',
+    'Tested': '测试完成'
+  }
+  return textMap[status] || status
+}
+
 const drawCharts = () => {
   console.log('drawCharts 被调用')
   console.log('monitorData.value:', monitorData.value)
@@ -550,37 +852,42 @@ onMounted(() => {
 
   socket.on('training_log', (data) => {
     console.log('收到日志:', data)
-    if (currentTrainingId) {
-      const record = trainingRecords.value.find(r => r.training_id === currentTrainingId)
+    // 使用消息中的 training_id，而不是全局变量
+    const trainingId = data.training_id
+    if (trainingId && activeTrainingIds.has(trainingId)) {
+      const record = trainingRecords.value.find(r => r.training_id === trainingId)
       if (record) {
         if (!record.logs) {
           record.logs = []
         }
         record.logs.push(data.message)
-        // 自动展开日志
-        record.showLogs = true
-        scrollToBottom(currentTrainingId)
+        // 不自动展开日志，保持当前状态
+        if (record.showLogs) {
+          scrollToBottom(trainingId)
+        }
       }
     }
   })
 
   socket.on('training_complete', async (data) => {
     console.log('训练完成:', data)
-    if (currentTrainingId) {
-      const record = trainingRecords.value.find(r => r.training_id === currentTrainingId)
+    const trainingId = data.training_id
+    if (trainingId && activeTrainingIds.has(trainingId)) {
+      const record = trainingRecords.value.find(r => r.training_id === trainingId)
       if (record) {
         if (data.status === 'success') {
-          message.value = `训练 ${currentTrainingId} 完成！`
+          message.value = `训练 ${trainingId} 完成！`
           messageType.value = 'success'
           
-          // 重新加载训练记录以获取更新后的成本
-          await loadTrainingRecords()
+          // 只刷新这一条记录，不影响其他记录
+          await refreshSingleRecord(trainingId)
         } else {
-          message.value = `训练 ${currentTrainingId} 失败：${data.message}`
+          message.value = `训练 ${trainingId} 失败：${data.message}`
           messageType.value = 'error'
         }
       }
-      currentTrainingId = null
+      // 从活跃集合中移除
+      activeTrainingIds.delete(trainingId)
     }
   })
 
@@ -610,25 +917,45 @@ h2 {
   margin-bottom: 1.5rem;
 }
 
-.control-panel {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
 .create-btn {
   padding: 0.75rem 2rem;
   border: none;
   border-radius: 4px;
   font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.3s;
-  background: #9c27b0;
+  background: #764ba2 100%;
   color: white;
+  cursor: pointer;
+  transition: opacity 0.3s;
+  margin-bottom: 1rem;
 }
 
 .create-btn:hover {
-  background: #7b1fa2;
+  opacity: 0.9;
+}
+
+.filter-group {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.filter-select {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: white;
+  transition: border-color 0.3s;
+}
+
+.filter-select:hover {
+  border-color: #9c27b0;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #9c27b0;
 }
 
 .message {
@@ -727,6 +1054,41 @@ h4 {
 .record-field {
   color: #555;
   font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-training {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-trained {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.status-testing {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-tested {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.status-default {
+  background: #f5f5f5;
+  color: #666;
 }
 
 .record-actions {
@@ -736,15 +1098,28 @@ h4 {
 }
 
 .monitor-btn,
+.log-btn,
+.dataset-btn,
 .start-btn,
 .refresh-btn,
 .delete-btn {
-  padding: 0.5rem 1.5rem;
+  padding: 0.4rem 1rem;
   border: none;
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: background 0.3s;
+  white-space: nowrap;
+  outline: none;
+}
+
+.monitor-btn:focus,
+.log-btn:focus,
+.dataset-btn:focus,
+.start-btn:focus,
+.refresh-btn:focus,
+.delete-btn:focus {
+  outline: none;
 }
 
 .monitor-btn {
@@ -754,6 +1129,24 @@ h4 {
 
 .monitor-btn:hover {
   background: #2980b9;
+}
+
+.log-btn {
+  background: #f39c12;
+  color: white;
+}
+
+.log-btn:hover {
+  background: #e67e22;
+}
+
+.dataset-btn {
+  background: #16a085;
+  color: white;
+}
+
+.dataset-btn:hover {
+  background: #138d75;
 }
 
 .start-btn {
@@ -915,6 +1308,27 @@ tbody tr:hover {
   color: #333;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.download-btn {
+  padding: 0.5rem 1rem;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.download-btn:hover {
+  background: #2980b9;
+}
+
 .close-btn {
   background: none;
   border: none;
@@ -1038,6 +1452,131 @@ tbody tr:hover {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.log-dialog {
+  max-width: 1000px;
+  width: 90%;
+}
+
+.log-dialog .dialog-body {
+  padding: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.log-content {
+  background: #1e1e1e;
+  padding: 1.5rem;
+  min-height: 500px;
+}
+
+.log-content pre {
+  margin: 0;
+  color: #d4d4d4;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.error-message {
+  text-align: center;
+  padding: 3rem;
+  color: #e74c3c;
+  font-size: 1.1rem;
+}
+
+.create-dialog {
+  max-width: 700px;
+  width: 90%;
+}
+
+.create-dialog .dialog-body {
+  padding: 1.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.render-selection h4 {
+  margin: 0 0 1rem 0;
+  color: #333;
+}
+
+.render-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.render-item {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.render-item:hover {
+  border-color: #9c27b0;
+  background: #f9f9f9;
+}
+
+.render-checkbox {
+  display: flex;
+  align-items: flex-start;
+  padding: 1rem;
+  cursor: pointer;
+  gap: 1rem;
+}
+
+.render-checkbox input[type="checkbox"] {
+  margin-top: 0.25rem;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.render-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.dataset-dialog {
+  max-width: 700px;
+  width: 90%;
+}
+
+.dataset-dialog .dialog-body {
+  padding: 1.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.dataset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dataset-item {
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.dataset-field {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.dataset-field:last-child {
+  margin-bottom: 0;
 }
 </style>
 

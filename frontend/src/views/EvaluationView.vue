@@ -2,91 +2,65 @@
   <div class="evaluation-view">
     <h2>测试评估</h2>
     
-    <div class="evaluation-container">
-      <div class="section">
-        <h3>选择训练记录</h3>
-        <div v-if="trainingRecords.length === 0" class="empty-message">
-          <p>暂无已完成的训练记录</p>
-        </div>
-        <div v-else class="records-grid">
-          <div 
-            v-for="record in completedRecords" 
-            :key="record.id" 
-            class="record-item"
-            :class="{ 'selected': selectedRecord?.id === record.id }"
-            @click="selectRecord(record)">
-            <div class="record-id">{{ record.id }}</div>
-            <div class="record-time">{{ record.createdAt }}</div>
-            <div class="record-status">已完成</div>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="selectedRecord" class="section">
-        <h3>测试配置</h3>
-        <div class="config-form">
-          <div class="form-group">
-            <label>测试数据集：</label>
-            <select v-model="testConfig.dataset">
-              <option value="test_set_1">测试集1</option>
-              <option value="test_set_2">测试集2</option>
-              <option value="validation_set">验证集</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>评估指标：</label>
-            <div class="checkbox-group">
-              <label><input type="checkbox" v-model="testConfig.metrics.accuracy"> 准确率</label>
-              <label><input type="checkbox" v-model="testConfig.metrics.precision"> 精确率</label>
-              <label><input type="checkbox" v-model="testConfig.metrics.recall"> 召回率</label>
-              <label><input type="checkbox" v-model="testConfig.metrics.f1"> F1分数</label>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>批次大小：</label>
-            <input type="number" v-model.number="testConfig.batchSize" min="1" max="128">
-          </div>
-        </div>
-        
-        <div class="action-buttons">
-          <button @click="startEvaluation" :disabled="evaluating" class="start-eval-btn">
-            {{ evaluating ? '评估中...' : '开始评估' }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="evaluationResults.length > 0" class="section">
-        <h3>评估结果</h3>
-        <div class="results-list">
-          <div v-for="result in evaluationResults" :key="result.id" class="result-card">
-            <div class="result-header">
-              <div class="result-info">
-                <span class="result-label">训练ID：</span>{{ result.trainingId }}
-              </div>
-              <div class="result-info">
-                <span class="result-label">评估时间：</span>{{ result.evaluatedAt }}
-              </div>
-            </div>
-            <div class="result-metrics">
-              <div v-if="result.metrics.accuracy !== null" class="metric-item">
-                <span class="metric-label">准确率：</span>
-                <span class="metric-value">{{ (result.metrics.accuracy * 100).toFixed(2) }}%</span>
-              </div>
-              <div v-if="result.metrics.precision !== null" class="metric-item">
-                <span class="metric-label">精确率：</span>
-                <span class="metric-value">{{ (result.metrics.precision * 100).toFixed(2) }}%</span>
-              </div>
-              <div v-if="result.metrics.recall !== null" class="metric-item">
-                <span class="metric-label">召回率：</span>
-                <span class="metric-value">{{ (result.metrics.recall * 100).toFixed(2) }}%</span>
-              </div>
-              <div v-if="result.metrics.f1 !== null" class="metric-item">
-                <span class="metric-label">F1分数：</span>
-                <span class="metric-value">{{ (result.metrics.f1 * 100).toFixed(2) }}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div class="filter-group">
+      <select v-model="filterStatus" class="filter-select">
+        <option value="">全部状态</option>
+        <option value="Training">训练中</option>
+        <option value="Trained">训练完成</option>
+        <option value="Testing">测试中</option>
+        <option value="Tested">测试完成</option>
+      </select>
+      
+      <select v-model="filterTime" class="filter-select">
+        <option value="">全部时间</option>
+        <option value="today">今天</option>
+        <option value="week">最近7天</option>
+        <option value="month">最近30天</option>
+      </select>
+    </div>
+    
+    <div v-if="loading" class="loading-container">
+      <div class="loading-spinner"></div>
+      <p>加载中...</p>
+    </div>
+    
+    <div v-else-if="filteredRecords.length === 0 && trainingRecords.length === 0" class="empty-message">
+      <p>暂无训练记录</p>
+    </div>
+    
+    <div v-else-if="filteredRecords.length === 0" class="empty-message">
+      <p>没有符合条件的训练记录</p>
+    </div>
+    
+    <div v-else class="records-section">
+      <h3>训练记录列表 ({{ filteredRecords.length }})</h3>
+      <div class="records-table">
+        <table>
+          <thead>
+            <tr>
+              <th>训练ID</th>
+              <th>状态</th>
+              <th>渲染成本</th>
+              <th>训练成本</th>
+              <th>测试分数</th>
+              <th>总分</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="record in filteredRecords" :key="record.training_id">
+              <td>{{ record.training_id }}</td>
+              <td>
+                <span :class="['status-badge', getStatusClass(record.status)]">
+                  {{ getStatusText(record.status) }}
+                </span>
+              </td>
+              <td>{{ record.render_cost || 0 }}</td>
+              <td>{{ record.train_cost || 0 }}</td>
+              <td>{{ record.test_score || '-' }}</td>
+              <td>{{ record.total_score || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -97,60 +71,74 @@ import { ref, computed, onMounted } from 'vue'
 import { getTrainingRecords } from '../api/trainingRecords'
 
 const trainingRecords = ref([])
-const selectedRecord = ref(null)
-const evaluating = ref(false)
-const evaluationResults = ref([])
+const loading = ref(true)
+const filterStatus = ref('')
+const filterTime = ref('')
 
-const testConfig = ref({
-  dataset: 'test_set_1',
-  metrics: {
-    accuracy: true,
-    precision: true,
-    recall: false,
-    f1: false
-  },
-  batchSize: 32
-})
-
-const completedRecords = computed(() => {
-  return trainingRecords.value.filter(r => r.status === 'completed')
-})
-
-const selectRecord = (record) => {
-  selectedRecord.value = record
+const getStatusText = (status) => {
+  const statusMap = {
+    'Training': '训练中',
+    'Trained': '训练完成',
+    'Testing': '测试中',
+    'Tested': '测试完成'
+  }
+  return statusMap[status] || status
 }
 
-const startEvaluation = async () => {
-  if (!selectedRecord.value) return
+const getStatusClass = (status) => {
+  const classMap = {
+    'Training': 'status-training',
+    'Trained': 'status-trained',
+    'Testing': 'status-testing',
+    'Tested': 'status-tested'
+  }
+  return classMap[status] || ''
+}
+
+const filteredRecords = computed(() => {
+  let records = [...trainingRecords.value]
   
-  evaluating.value = true
+  // 按状态筛选
+  if (filterStatus.value) {
+    records = records.filter(r => r.status === filterStatus.value)
+  }
   
-  // 模拟评估过程
-  setTimeout(() => {
-    const result = {
-      id: 'EVAL-' + Date.now(),
-      trainingId: selectedRecord.value.id,
-      evaluatedAt: new Date().toLocaleString('zh-CN'),
-      metrics: {
-        accuracy: testConfig.value.metrics.accuracy ? Math.random() * 0.2 + 0.8 : null,
-        precision: testConfig.value.metrics.precision ? Math.random() * 0.2 + 0.75 : null,
-        recall: testConfig.value.metrics.recall ? Math.random() * 0.2 + 0.7 : null,
-        f1: testConfig.value.metrics.f1 ? Math.random() * 0.2 + 0.72 : null
-      }
-    }
+  // 按时间筛选
+  if (filterTime.value) {
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     
-    evaluationResults.value.unshift(result)
-    evaluating.value = false
-  }, 2000)
-}
+    records = records.filter(r => {
+      const recordDate = new Date(r.created_time)
+      const diffTime = now - recordDate
+      const diffDays = diffTime / (1000 * 60 * 60 * 24)
+      
+      switch (filterTime.value) {
+        case 'today':
+          return recordDate >= today
+        case 'week':
+          return diffDays <= 7
+        case 'month':
+          return diffDays <= 30
+        default:
+          return true
+      }
+    })
+  }
+  
+  return records
+})
 
 const loadTrainingRecords = async () => {
   try {
+    loading.value = true
     const result = await getTrainingRecords()
     trainingRecords.value = result.data || []
   } catch (error) {
     console.error('加载训练记录失败:', error)
     trainingRecords.value = []
+  } finally {
+    loading.value = false
   }
 }
 
@@ -164,6 +152,7 @@ onMounted(() => {
   padding: 2rem;
   min-height: 100vh;
   width: 100%;
+  background: #f5f5f5;
 }
 
 h2 {
@@ -177,190 +166,139 @@ h3 {
   font-size: 1.1rem;
 }
 
-.evaluation-container {
+.filter-group {
   display: flex;
-  flex-direction: column;
-  gap: 2rem;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
 }
 
-.section {
+.filter-select {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: white;
+  transition: border-color 0.3s;
+}
+
+.filter-select:hover {
+  border-color: #42b983;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #42b983;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.loading-spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #42b983;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-container p {
+  margin-top: 1rem;
+  color: #666;
+}
+
+.empty-message {
+  text-align: center;
+  padding: 3rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.empty-message p {
+  color: #999;
+  font-size: 1.1rem;
+}
+
+.records-section {
   background: white;
   padding: 1.5rem;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-.empty-message {
-  text-align: center;
-  padding: 2rem;
-  color: #999;
+.records-table {
+  overflow-x: auto;
 }
 
-.records-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1rem;
+table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.record-item {
+thead {
+  background: #f8f9fa;
+}
+
+th {
   padding: 1rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s;
+  text-align: left;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid #dee2e6;
 }
 
-.record-item:hover {
-  border-color: #42b983;
-  box-shadow: 0 2px 8px rgba(66, 185, 131, 0.2);
-}
-
-.record-item.selected {
-  border-color: #42b983;
-  background: #f0fdf4;
-}
-
-.record-id {
-  font-weight: bold;
+td {
+  padding: 1rem;
+  border-bottom: 1px solid #dee2e6;
   color: #333;
-  margin-bottom: 0.5rem;
 }
 
-.record-time {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.5rem;
+tbody tr:hover {
+  background: #f8f9fa;
 }
 
-.record-status {
+.status-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: #e8f5e9;
-  color: #2e7d32;
   border-radius: 4px;
   font-size: 0.85rem;
+  font-weight: 500;
 }
 
-.config-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+.status-training {
+  background: #e8f5e9;
+  color: #2e7d32;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.status-trained {
+  background: #fff3e0;
+  color: #e65100;
 }
 
-.form-group label {
-  font-weight: bold;
-  color: #555;
+.status-testing {
+  background: #e3f2fd;
+  color: #1565c0;
 }
 
-.form-group select,
-.form-group input[type="number"] {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
+.status-tested {
+  background: #f3e5f5;
+  color: #6a1b9a;
 }
 
-.checkbox-group {
-  display: flex;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.checkbox-group label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: normal;
-  cursor: pointer;
-}
-
-.checkbox-group input[type="checkbox"] {
-  cursor: pointer;
-}
-
-.action-buttons {
-  margin-top: 1.5rem;
-  display: flex;
-  gap: 1rem;
-}
-
-.start-eval-btn {
-  padding: 0.75rem 2rem;
-  background: #42b983;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.start-eval-btn:hover:not(:disabled) {
-  background: #359268;
-}
-
-.start-eval-btn:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-
-.results-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.result-card {
-  background: #fafafa;
-  padding: 1.5rem;
-  border-radius: 6px;
-  border-left: 4px solid #42b983;
-}
-
-.result-header {
-  display: flex;
-  gap: 2rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-.result-info {
-  color: #555;
-}
-
-.result-label {
-  font-weight: bold;
-}
-
-.result-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.metric-item {
-  padding: 0.75rem;
-  background: white;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
-}
-
-.metric-label {
-  font-weight: bold;
-  color: #666;
-  display: block;
-  margin-bottom: 0.25rem;
-}
-
-.metric-value {
-  font-size: 1.5rem;
-  color: #42b983;
-  font-weight: bold;
+.no-competition {
+  color: #999;
+  font-style: italic;
 }
 </style>

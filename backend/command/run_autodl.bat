@@ -25,7 +25,7 @@ echo TRAIN_FOLDER=%TRAIN_FOLDER%
 echo ==== DEBUG END ====
 
 echo === Step 1: Execute remote script ===
-ssh -p 19567 root@connect.cqa1.seetacloud.com bash /root/autodl-tmp/docker-monitor/main-zyd.sh train%TRAINING_ID%
+ssh -p 19567 root@connect.cqa1.seetacloud.com  bash /root/autodl-tmp/docker-monitor/main-zyd.sh train%TRAINING_ID%
 
 if errorlevel 1 (
     echo Remote script execution failed

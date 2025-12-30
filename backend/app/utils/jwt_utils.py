@@ -4,10 +4,11 @@ from functools import wraps
 from flask import request, jsonify
 from app.config import Config
 
-def create_token(user_id):
+def create_token(user_id, role='user'):
     """创建 JWT token"""
     payload = {
         'user_id': user_id,
+        'role': role,
         'exp': datetime.utcnow() + Config.JWT_ACCESS_TOKEN_EXPIRES,
         'iat': datetime.utcnow()
     }

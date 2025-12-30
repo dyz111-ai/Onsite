@@ -12,8 +12,8 @@ class TrainingService:
     def run_training_script(script_path, training_id, socketio):
         """在后台线程中执行训练脚本并实时发送输出"""
         try:
-            socketio.emit('training_log', {'message': f'开始执行脚本: {os.path.basename(script_path)}'})
-            socketio.emit('training_log', {'message': f'训练ID: {training_id}'})
+            socketio.emit('training_log', {'message': f'开始执行脚本: {os.path.basename(script_path)}', 'training_id': training_id})
+            socketio.emit('training_log', {'message': f'训练ID: {training_id}', 'training_id': training_id})
 
             # 根据操作系统选择执行方式
             if platform.system() == 'Windows':
@@ -55,22 +55,27 @@ class TrainingService:
                         decoded_line = line.decode('utf-8', errors='ignore').strip()
 
                 if decoded_line:
-                    socketio.emit('training_log', {'message': decoded_line})
+                    socketio.emit('training_log', {'message': decoded_line, 'training_id': training_id})
 
             # 等待进程结束
             returncode = process.wait()
 
-            socketio.emit('training_log', {'message': f'脚本执行完毕，返回码: {returncode}'})
+            socketio.emit('training_log', {'message': f'脚本执行完毕，返回码: {returncode}', 'training_id': training_id})
 
             if returncode == 0:
                 # 训练成功，计算并更新成本
                 TrainingService.calculate_and_update_cost(training_id, socketio)
+                
+                # 更新状态为 Trained
+                TrainingService.update_training_status(training_id, 'Trained')
+                socketio.emit('training_log', {'message': '训练状态已更新为 Trained', 'training_id': training_id})
+                
                 socketio.emit('training_complete', {'status': 'success', 'message': '训练完成', 'training_id': training_id})
             else:
                 socketio.emit('training_complete', {'status': 'error', 'message': f'训练失败 (返回码: {returncode})', 'training_id': training_id})
 
         except Exception as e:
-            socketio.emit('training_log', {'message': f'执行脚本时发生异常: {str(e)}'})
+            socketio.emit('training_log', {'message': f'执行脚本时发生异常: {str(e)}', 'training_id': training_id})
             socketio.emit('training_complete', {'status': 'error', 'message': str(e), 'training_id': training_id})
     
     @staticmethod
@@ -82,15 +87,26 @@ class TrainingService:
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
             csv_path = os.path.join(project_root, 'cache', 'train', f'train{training_id}', 'resource_usage.csv')
             
-            socketio.emit('training_log', {'message': f'查找CSV文件: {csv_path}'})
+            socketio.emit('training_log', {'message': f'查找CSV文件: {csv_path}', 'training_id': training_id})
             
             if os.path.exists(csv_path):
                 cost = TrainingTask.update_cost_from_csv(training_id, csv_path)
-                socketio.emit('training_log', {'message': f'训练成本已计算: {cost} 元'})
+                socketio.emit('training_log', {'message': f'训练成本已计算: {cost} 元', 'training_id': training_id})
             else:
-                socketio.emit('training_log', {'message': f'警告: 未找到资源使用数据文件 {csv_path}'})
+                socketio.emit('training_log', {'message': f'警告: 未找到资源使用数据文件 {csv_path}', 'training_id': training_id})
         except Exception as e:
-            socketio.emit('training_log', {'message': f'计算成本时出错: {str(e)}'})
+            socketio.emit('training_log', {'message': f'计算成本时出错: {str(e)}', 'training_id': training_id})
+    
+    @staticmethod
+    def update_training_status(training_id, status):
+        """更新训练状态"""
+        try:
+            record = TrainingTask.get_by_id(training_id)
+            if record:
+                record.status = status
+                record.update()
+        except Exception as e:
+            print(f'更新训练状态失败: {e}')
     
     @staticmethod
     def get_script_path():

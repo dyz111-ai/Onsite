@@ -21,35 +21,58 @@ class TrainingTask:
             'status': self.status,
             'train_cost': self.train_cost,
             'test_score': self.test_score,
-            'total_score': self.total_score
+            'total_score': self.total_score,
+            'competition_type': getattr(self, 'competition_type', None),
+            'competition_number': getattr(self, 'competition_number', None),
+            'render_cost': getattr(self, 'render_cost', 0.0)
         }
     
     @staticmethod
     def get_all_by_user(user_id):
-        """获取指定用户的所有训练记录"""
+        """获取指定用户的所有训练记录（包含测试赛题信息和渲染成本）"""
         try:
             with get_db_cursor(commit=False) as cursor:
                 cursor.execute(
                     """
-                    SELECT training_id, user_id, created_time, status, 
-                           train_cost, test_score, total_score
-                    FROM training_task
-                    WHERE user_id = %s
-                    ORDER BY created_time DESC
+                    SELECT 
+                        t.training_id, t.user_id, t.created_time, t.status, 
+                        t.train_cost, t.test_score, t.total_score,
+                        c.type as competition_type, c.number as competition_number,
+                        COALESCE(SUM(r.render_cost), 0) as render_cost
+                    FROM training_task t
+                    LEFT JOIN test_task tt ON t.training_id = tt.training_id
+                    LEFT JOIN competition c ON tt.competition_id = c.competition_id
+                    LEFT JOIN training_render_relation trr ON t.training_id = trr.training_id
+                    LEFT JOIN render r ON trr.render_id = r.render_id
+                    WHERE t.user_id = %s
+                    GROUP BY t.training_id, t.user_id, t.created_time, t.status, 
+                             t.train_cost, t.test_score, t.total_score,
+                             c.type, c.number
+                    ORDER BY t.created_time DESC
                     """,
                     (user_id,)
                 )
                 results = cursor.fetchall()
                 
-                return [TrainingTask(
-                    training_id=row['training_id'],
-                    user_id=row['user_id'],
-                    created_time=row['created_time'],
-                    status=row['status'],
-                    train_cost=row['train_cost'],
-                    test_score=row['test_score'],
-                    total_score=row['total_score']
-                ) for row in results]
+                records = []
+                for row in results:
+                    record = TrainingTask(
+                        training_id=row['training_id'],
+                        user_id=row['user_id'],
+                        created_time=row['created_time'],
+                        status=row['status'],
+                        train_cost=row['train_cost'],
+                        test_score=row['test_score'],
+                        total_score=row['total_score']
+                    )
+                    # 添加赛题信息
+                    record.competition_type = row['competition_type']
+                    record.competition_number = row['competition_number']
+                    # 添加渲染成本
+                    record.render_cost = float(row['render_cost']) if row['render_cost'] else 0.0
+                    records.append(record)
+                
+                return records
         except Exception as e:
             print(f"获取训练记录失败: {e}")
             return []
@@ -118,20 +141,15 @@ class TrainingTask:
         """创建新的训练记录"""
         try:
             with get_db_cursor() as cursor:
-                # 获取下一个 training_id
-                cursor.execute("SELECT COALESCE(MAX(training_id), 0) + 1 as next_id FROM training_task")
-                result = cursor.fetchone()
-                next_id = result['next_id']
-                
-                # 插入新记录，created_time 使用当前时间戳（精确到秒）
+                # 使用数据库自增 ID，不手动计算
                 cursor.execute(
                     """
                     INSERT INTO training_task 
-                    (training_id, user_id, created_time, status, train_cost, test_score, total_score)
-                    VALUES (%s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s)
+                    (user_id, created_time, status, train_cost, test_score, total_score)
+                    VALUES (%s, CURRENT_TIMESTAMP, %s, %s, %s, %s)
                     RETURNING training_id, user_id, created_time, status, train_cost, test_score, total_score
                     """,
-                    (next_id, user_id, status, train_cost, test_score, total_score)
+                    (user_id, status, train_cost, test_score, total_score)
                 )
                 row = cursor.fetchone()
                 
@@ -237,4 +255,236 @@ class TrainingTask:
                 cursor.execute("DELETE FROM training_task WHERE training_id = %s", (training_id,))
         except Exception as e:
             print(f"删除训练记录失败: {e}")
+            raise e
+
+    @staticmethod
+    def get_leaderboard():
+        """
+        获取总分排行榜数据
+        逻辑：找到每个参赛选手的最高分数记录，按分数排序
+        注意：所有参赛选手都要显示，没有训练任务的选手分数记为0，排在最后
+        """
+        try:
+            with get_db_cursor(commit=False) as cursor:
+                # 查询每个参赛选手的最高分数记录，包括没有训练任务的选手
+                # 使用窗口函数ROW_NUMBER()来获取每个用户的最高分记录
+                # 分数相同时按创建时间排序，还相同按user_id排序
+                query = """
+                WITH all_participants AS (
+                    SELECT participant_id as user_id, account FROM participant
+                ),
+                ranked_tasks AS (
+                    SELECT 
+                        p.user_id,
+                        p.account,
+                        t.training_id,
+                        t.created_time,
+                        t.total_score,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY p.user_id 
+                            ORDER BY 
+                                COALESCE(t.total_score, 0) DESC,
+                                t.created_time DESC,
+                                p.account ASC
+                        ) as rank_within_user,
+                        CASE WHEN t.training_id IS NOT NULL THEN 1 ELSE 0 END as has_training_data
+                    FROM all_participants p
+                    LEFT JOIN training_task t ON p.user_id = t.user_id
+                )
+                SELECT 
+                    ROW_NUMBER() OVER (
+                        ORDER BY 
+                            rt.has_training_data DESC,
+                            COALESCE(rt.total_score, 0) DESC,
+                            rt.created_time DESC,
+                            rt.account ASC
+                    ) as global_rank,
+                    rt.user_id,
+                    rt.account,
+                    COALESCE(rt.total_score, 0) as max_score,
+                    rt.created_time
+                FROM ranked_tasks rt
+                WHERE rt.rank_within_user = 1
+                ORDER BY 
+                    rt.has_training_data DESC,
+                    max_score DESC,
+                    rt.created_time DESC,
+                    rt.account ASC
+                """
+                
+                cursor.execute(query)
+                results = cursor.fetchall()
+                
+                return results
+        except Exception as e:
+            print(f"获取总分排行榜数据失败: {e}")
+            raise e
+    
+    @staticmethod
+    def get_leaderboard_by_cost():
+        """
+        获取训练成本排行榜数据
+        逻辑：找到每个参赛选手的最低成本记录，按成本排序（越低越好）
+        注意：所有参赛选手都要显示，0或NULL的成本视为无穷大，排在最后
+        """
+        try:
+            with get_db_cursor(commit=False) as cursor:
+                # 查询每个参赛选手的最低成本记录，包括没有训练任务的选手
+                # 使用窗口函数ROW_NUMBER()来获取每个用户的最低成本记录
+                # 成本相同时按创建时间排序，还相同按user_id排序
+                query = """
+                WITH all_participants AS (
+                    SELECT participant_id as user_id, account FROM participant
+                ),
+                ranked_tasks AS (
+                    SELECT 
+                        p.user_id,
+                        p.account,
+                        t.training_id,
+                        t.created_time,
+                        t.train_cost,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY p.user_id 
+                            ORDER BY 
+                                CASE 
+                                    WHEN t.train_cost IS NULL OR t.train_cost = 0 THEN 1 ELSE 0 END ASC,
+                                t.train_cost ASC,
+                                t.created_time DESC,
+                                p.account ASC
+                        ) as rank_within_user,
+                        CASE WHEN t.training_id IS NOT NULL THEN 1 ELSE 0 END as has_training_data
+                    FROM all_participants p
+                    LEFT JOIN training_task t ON p.user_id = t.user_id
+                )
+                SELECT 
+                    ROW_NUMBER() OVER (
+                        ORDER BY 
+                            rt.has_training_data DESC,
+                            CASE 
+                                WHEN rt.train_cost IS NULL OR rt.train_cost = 0 THEN 1 ELSE 0 END ASC,
+                            rt.train_cost ASC,
+                            rt.created_time DESC,
+                            rt.account ASC
+                    ) as global_rank,
+                    rt.user_id,
+                    rt.account,
+                    CASE 
+                        WHEN rt.train_cost IS NULL OR rt.train_cost = 0 THEN '无穷大' 
+                        ELSE rt.train_cost::TEXT 
+                    END as min_cost,
+                    rt.created_time
+                FROM ranked_tasks rt
+                WHERE rt.rank_within_user = 1
+                ORDER BY 
+                    rt.has_training_data DESC,
+                    CASE 
+                        WHEN rt.train_cost IS NULL OR rt.train_cost = 0 THEN 1 ELSE 0 END ASC,
+                    rt.train_cost ASC,
+                    rt.created_time DESC,
+                    rt.account ASC
+                """
+                
+                cursor.execute(query)
+                results = cursor.fetchall()
+                
+                return results
+        except Exception as e:
+            print(f"获取成本排行榜数据失败: {e}")
+            raise e
+    
+    @staticmethod
+    def get_leaderboard_by_test_score():
+        """
+        获取测试分数排行榜数据
+        逻辑：找到每个参赛选手的最高测试分数记录，按分数排序（越高越好）
+        注意：所有参赛选手都要显示，没有训练任务的选手测试分数记为0，排在最后
+        """
+        try:
+            with get_db_cursor(commit=False) as cursor:
+                # 查询每个参赛选手的最高测试分数记录，包括没有训练任务的选手
+                # 使用窗口函数ROW_NUMBER()来获取每个用户的最高测试分数记录
+                # 分数相同时按创建时间排序，还相同按user_id排序
+                query = """
+                WITH all_participants AS (
+                    SELECT participant_id as user_id, account FROM participant
+                ),
+                ranked_tasks AS (
+                    SELECT 
+                        p.user_id,
+                        p.account,
+                        t.training_id,
+                        t.created_time,
+                        t.test_score,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY p.user_id 
+                            ORDER BY 
+                                COALESCE(t.test_score, 0) DESC,
+                                t.created_time DESC,
+                                p.account ASC
+                        ) as rank_within_user,
+                        CASE WHEN t.training_id IS NOT NULL THEN 1 ELSE 0 END as has_training_data
+                    FROM all_participants p
+                    LEFT JOIN training_task t ON p.user_id = t.user_id
+                )
+                SELECT 
+                    ROW_NUMBER() OVER (
+                        ORDER BY 
+                            rt.has_training_data DESC,
+                            COALESCE(rt.test_score, 0) DESC,
+                            rt.created_time DESC,
+                            rt.account ASC
+                    ) as global_rank,
+                    rt.user_id,
+                    rt.account,
+                    COALESCE(rt.test_score, 0) as max_test_score,
+                    rt.created_time
+                FROM ranked_tasks rt
+                WHERE rt.rank_within_user = 1
+                ORDER BY 
+                    rt.has_training_data DESC,
+                    max_test_score DESC,
+                    rt.created_time DESC,
+                    rt.account ASC
+                """
+                
+                cursor.execute(query)
+                results = cursor.fetchall()
+                
+                return results
+        except Exception as e:
+            print(f"获取测试分数排行榜数据失败: {e}")
+            raise e
+    
+    @staticmethod
+    def get_user_best_score(user_id):
+        """
+        获取指定用户的最高分数记录
+        """
+        try:
+            with get_db_cursor(commit=False) as cursor:
+                query = """
+                SELECT 
+                    training_id,
+                    user_id,
+                    created_time,
+                    status,
+                    train_cost,
+                    test_score,
+                    total_score
+                FROM training_task
+                WHERE user_id = %s
+                ORDER BY 
+                    COALESCE(total_score, 0) DESC,
+                    created_time DESC
+                LIMIT 1
+                """
+                
+                cursor.execute(query, (user_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    return TrainingTask(**result)
+                return None
+        except Exception as e:
+            print(f"获取用户最高分记录失败: {e}")
             raise e
