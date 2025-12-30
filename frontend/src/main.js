@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import Login from './views/Login.vue'
 import CompetitionView from './views/CompetitionView.vue'
+import CompetitionManagementView from './views/CompetitionManagementView.vue'
 import TrainingView from './views/TrainingView.vue'
 import ResultView from './views/ResultView.vue'
 import TaskSubmitView from './views/TaskSubmitView.vue'
@@ -12,6 +13,7 @@ const routes = [
   { path: '/login', component: Login },
   { path: '/', redirect: '/login' },
   { path: '/competition', component: CompetitionView, meta: { requiresAuth: true } },
+  { path: '/competition-management', component: CompetitionManagementView, meta: { requiresAuth: true } },
   { path: '/training', component: TrainingView, meta: { requiresAuth: true } },
   { path: '/result', component: ResultView, meta: { requiresAuth: true } },
   { path: '/task-submit', component: TaskSubmitView, meta: { requiresAuth: true } },

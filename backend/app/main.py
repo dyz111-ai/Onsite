@@ -4,9 +4,11 @@ from app import app, socketio
 # 注册蓝图
 from app.api.auth import auth_bp
 from app.api.training import training_bp
+from app.api.competition import competition_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(training_bp)
+app.register_blueprint(competition_bp)
 
 
 @app.route('/')

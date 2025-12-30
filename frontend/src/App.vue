@@ -19,6 +19,9 @@
         <li>
           <router-link to="/result" class="nav-item">结果展示</router-link>
         </li>
+        <li>
+          <router-link to="/competition-management" class="nav-item">赛题管理</router-link>
+        </li>
       </ul>
       <div class="user-info">
         <div class="username">{{ username }}</div>
@@ -63,6 +66,7 @@ const handleLogout = () => {
 #app {
   font-family: Arial, sans-serif;
   min-height: 100vh;
+  width: 100%;
 }
 
 #app:not(:has(.auth-container)) {
@@ -119,7 +123,7 @@ const handleLogout = () => {
   padding: 0;
   flex: 1;
   min-height: 100vh;
-  width: calc(100% - 200px);
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }
