@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.models.competition import Competition
+from app.models.train_competition import Competition
 from app.models.test_task import TestTask
 from app.utils.jwt_utils import token_required
 
