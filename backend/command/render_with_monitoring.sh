@@ -59,7 +59,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-#  "nohup bash -c 'cd /root/autodl-tmp/docker-monitor && bash ./monitor_render.sh 1 render_1' > /dev/null 2>&1 &"
+
+# ssh -p $SERVER_PORT $SERVER_USER@$SERVER_HOST "nohup bash -c 'cd /root/autodl-tmp/docker-monitor && bash ./monitor_render.sh 1 render_1' > /dev/null 2>&1 &"
+# nohup bash -c 'cd /root/autodl-tmp/docker-monitor && bash ./monitor_render.sh 1 render_1' > /dev/null 2>&1 &
 
 echo "Render task started successfully with ID: $RENDER_ID"
 exit 0

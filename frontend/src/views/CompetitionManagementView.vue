@@ -1,6 +1,6 @@
 <template>
-  <div class="admin-content">
-    <h1>赛题管理</h1>
+  <div class="page-container">
+    <h1>赛题查看</h1>
     
     <!-- Add competition button -->
     <button class="add-btn" @click="openModal">
@@ -116,7 +116,7 @@
 import CompetitionAddingComponent from '../components/CompetitionAddingComponent.vue';
 
 export default {
-  name: 'AdminView',
+  name: 'CompetitionView',
   components: {
     CompetitionAddingComponent
   },
@@ -213,6 +213,7 @@ export default {
       });
     },
     
+    
     formatStatus(status) {
       const statusMap = {
         'Unreleased': '未发布',
@@ -257,9 +258,13 @@ export default {
 </script>
 
 <style scoped>
-.admin-content {
+.page-container {
+  width: 100%;
   padding: 2rem;
+  box-sizing: border-box;
 }
+
+/* 移除 flex 布局，因为这里不需要 */
 
 h1 {
   color: #333;
@@ -280,6 +285,27 @@ h1 {
 
 .add-btn:hover {
   background-color: #45a049;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 8px;
+  width: 400px;
+  max-width: 90%;
 }
 
 .form-group {
@@ -381,8 +407,11 @@ select, input {
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   padding: 1.5rem;
   width: 100%;
+  height: 100%;
+  margin: 0 auto; /* 水平居中 */
   box-sizing: border-box;
   overflow: hidden;
+  flex: 1;
 }
 
 .loading-indicator {
@@ -458,9 +487,14 @@ select, input {
   color: #e65100;
 }
 
-.status-published {
+.status-ongoing {
   background-color: #e3f2fd;
   color: #0d47a1;
+}
+
+.status-completed {
+  background-color: #e8f5e9;
+  color: #1b5e20;
 }
 
 .view-btn {
@@ -490,26 +524,6 @@ select, input {
   gap: 1rem;
 }
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: white;
-  padding: 2rem;
-  border-radius: 8px;
-  width: 400px;
-  max-width: 90%;
-}
 .pagination-btn {
   padding: 0.5rem 1rem;
   background: #f5f5f5;

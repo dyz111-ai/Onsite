@@ -2,30 +2,29 @@ import subprocess
 import threading
 import os
 import platform
-from app.models.competition import Competition
+from app.models.task_submit import TaskSubmit
 from app.utils.file_utils import save_file
 from flask import current_app
 
-class CompetitionService:
+class TaskSubmitService:
     """竞赛服务类，处理竞赛相关操作"""
     
     @staticmethod
     # In app/services/competition.py
-    def create_competition(created_time, end_time, status, type, number, open_scenario_file, target_points_file):
-        """Create a new competition with file uploads"""
+    def submit_task(user_id, created_time, name, open_scenario_file, target_points_file):
         try:
-            # Create competition record with file paths
-            competition_id = Competition.insert(
-                created_time=created_time,
-                end_time=end_time,
-                status=status,
-                type=type,
-                number=number
+            status = "Rendering"
+            render_id = TaskSubmit.submit_task(
+                user_id,
+                status,
+                created_time, 
+                name, 
             )
 
+            task_type = "render"
             # Save files to appropriate directories
-            save_file(open_scenario_file, 'OpenSCENARIO', competition_id, "competition")
-            save_file(target_points_file, 'destination', competition_id, "competition")
+            save_file(open_scenario_file, 'OpenSCENARIO', render_id, task_type)
+            save_file(target_points_file, 'destination', render_id, task_type)
             
             # FIX: Use proper path resolution based on current file location
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,15 +37,15 @@ class CompetitionService:
                     try:
                         # Run the script and capture results
                         result = subprocess.run(
-                            [script_path, "competition", str(competition_id)],
+                            [script_path, task_type, str(render_id)],
                             capture_output=True,
                             text=True
                         )
                         
                         # Only set published if script completed successfully (exit code 0)
-                        Competition.set_published(competition_id)
+                        TaskSubmit.set_completed(render_id)
                         if result.returncode == 0:
-                            app.logger.info(f"Competition {competition_id} published successfully")
+                            app.logger.info(f"Render {render_id} published successfully")
                         else:
                             app.logger.error(
                                 f"Render script failed with exit code {result.returncode}\n"
@@ -54,7 +53,7 @@ class CompetitionService:
                                 f"Stderr: {result.stderr}"
                             )
                     except subprocess.TimeoutExpired:
-                        app.logger.error(f"Render script timed out for competition {competition_id}")
+                        app.logger.error(f"Render script timed out for competition {render_id}")
                     except Exception as e:
                         app.logger.error(f"Error executing render script: {str(e)}")
                         
@@ -62,22 +61,7 @@ class CompetitionService:
             render_thread = threading.Thread(target=run_render_script)
             render_thread.start()
             
-            return competition_id
+            return render_id
         except Exception as e:
             raise Exception(f"Failed to create competition: {str(e)}")
 
-
-    @staticmethod
-    def get_min_number_by_type(competition_type: str) -> int:
-        """获取指定类型竞赛的最小题号"""
-        min = Competition.get_min_number_by_type(competition_type)
-        if min:
-            return min
-        else:
-            return 0
-        
-    @staticmethod
-    def get_competitions_by_type(competition_type: str):
-        """获取指定类型竞赛"""
-        competitions = Competition.get_competitions_by_type(competition_type)
-        return competitions

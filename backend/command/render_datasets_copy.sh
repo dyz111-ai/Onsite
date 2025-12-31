@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Get task ID (no spaces around = in shell variables)
-TASK=$1
-RENDER_ID=$2
+TASK=render
+RENDER_ID=$1
 
 # Validate task parameter
 if [ -z "$TASK" ]; then
@@ -71,11 +71,12 @@ fi
 
 # Start render task on render server
 echo "Starting render task on $SERVER_HOST:$SERVER_PORT..."
-ssh -p $SERVER_PORT $SERVER_USER@$SERVER_HOST "bash /root/autodl-tmp/carla_data_collect/scripts/main.sh $TASK $RENDER_ID"
+ssh -p $SERVER_PORT $SERVER_USER@$SERVER_HOST "cd /root/autodl-tmp/docker-monitor && bash ./monitor_render.sh $RENDER_ID render_$RENDER_ID"
 if [ $? -ne 0 ]; then
     echo "Failed to start render task"
-    # exit 1
+    exit 1
 fi
+
 
 echo "Render task started successfully with ID: $RENDER_ID"
 

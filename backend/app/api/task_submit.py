@@ -2,38 +2,36 @@
 from flask import Blueprint, jsonify, request
 import threading
 import os
-from app.models.competition import Competition
+from app.models.task_submit import TaskSubmit
 from app.utils.jwt_utils import decode_token
-from app.services.competition import CompetitionService
+from app.services.task_submit import TaskSubmitService
 from flask import send_from_directory
 
-task_submit_bp = Blueprint('task_submit', __name__, url_prefix='/api/task_submit')
+task_submit_bp = Blueprint('task_submit', __name__, url_prefix='/api/task-submit')
 
-@task_submit_bp.route('/add', methods=['POST'])
-def add_competition():
+@task_submit_bp.route('/submit', methods=['POST'])
+def submit_task():
     """提交一个赛题"""
     try:
         # For multipart/form-data, use request.form and request.files
-        created_time = request.form.get('created_time')
-        end_time = request.form.get('end_time')
+        user_id = request.form.get('user_id')
         status = request.form.get('status')
-        type = request.form.get('type')
-        number = request.form.get('number')
+        created_time = request.form.get('created_time')
+        name = request.form.get('name')
+
         open_scenario_file = request.files.get('open_scenario')
         target_points_file = request.files.get('target_points')
         
         # Validate required fields
-        if not all([created_time, end_time, status, type, number, open_scenario_file, target_points_file]):
+        if not all([user_id, status, created_time, name, open_scenario_file, target_points_file]):
             return jsonify({"error": "Missing required fields"}), 400
             
         # Process the files and create competition
-        CompetitionService.create_competition(
+        TaskSubmitService.submit_task(
+            user_id, 
             created_time, 
-            end_time, 
-            status, 
-            type, 
-            number,
-            open_scenario_file,
+            name, 
+            open_scenario_file, 
             target_points_file
         )
         
