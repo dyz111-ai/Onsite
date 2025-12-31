@@ -6,6 +6,10 @@
       新增训练
     </button>
     
+    <button @click="downloadImage" class="download-btn">
+      镜像下载
+    </button>
+    
     <div class="filter-group">
       <select v-model="filterStatus" class="filter-select">
         <option value="">全部状态</option>
@@ -409,6 +413,82 @@ const showCreateDialog = async () => {
 
 const closeDialog = () => {
   showDialog.value = false
+}
+
+const downloadImage = async () => {
+  try {
+    // 检查是否支持 File System Access API
+    if ('showSaveFilePicker' in window) {
+      let fileHandle = null
+      
+      try {
+        // 先让用户选择保存位置（在用户手势的直接处理程序中）
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: 'Onsite-image.tar',
+          types: [{
+            description: 'TAR Archive',
+            accept: { 'application/x-tar': ['.tar'] }
+          }]
+        })
+      } catch (err) {
+        // 用户取消了选择保存位置
+        if (err.name === 'AbortError') {
+          message.value = '已取消下载'
+          messageType.value = 'info'
+          return
+        } else {
+          throw err
+        }
+      }
+      
+      // 用户选择了位置，开始下载文件
+      message.value = '正在下载镜像文件...'
+      messageType.value = 'info'
+      
+      const token = localStorage.getItem('token')
+      const response = await axios.get('/api/training/download-image', {
+        headers: { 'Authorization': `Bearer ${token}` },
+        responseType: 'blob'
+      })
+      
+      const blob = new Blob([response.data], { type: 'application/x-tar' })
+      
+      // 写入文件
+      const writable = await fileHandle.createWritable()
+      await writable.write(blob)
+      await writable.close()
+      
+      message.value = '镜像文件下载成功'
+      messageType.value = 'success'
+    } else {
+      // 回退到传统下载方式
+      message.value = '正在准备下载镜像文件...'
+      messageType.value = 'info'
+      
+      const token = localStorage.getItem('token')
+      const response = await axios.get('/api/training/download-image', {
+        headers: { 'Authorization': `Bearer ${token}` },
+        responseType: 'blob'
+      })
+      
+      const blob = new Blob([response.data], { type: 'application/x-tar' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'Onsite-image.tar'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      message.value = '镜像文件下载成功（已保存到默认下载位置）'
+      messageType.value = 'success'
+    }
+  } catch (error) {
+    console.error('下载镜像失败:', error)
+    message.value = '下载镜像失败：' + (error.response?.data?.error || error.message)
+    messageType.value = 'error'
+  }
 }
 
 const createTraining = async () => {
@@ -927,9 +1007,30 @@ h2 {
   cursor: pointer;
   transition: opacity 0.3s;
   margin-bottom: 1rem;
+  min-width: 140px;
+  height: 45px;
 }
 
 .create-btn:hover {
+  opacity: 0.9;
+}
+
+.download-btn {
+  padding: 0.75rem 2rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  background: #667eea 100%;
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.3s;
+  margin-bottom: 1rem;
+  margin-left: 0.5rem;
+  min-width: 140px;
+  height: 45px;
+}
+
+.download-btn:hover {
   opacity: 0.9;
 }
 
