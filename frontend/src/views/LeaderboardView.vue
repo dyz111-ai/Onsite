@@ -9,7 +9,7 @@
         <div class="user-rank">
           <span v-if="userRank.totalScore" class="rank-info">
             我的排名：第 {{ userRank.totalScore.rank }} 名
-            <span class="rank-score">（{{ userRank.totalScore.score }} 分）</span>
+            <span class="rank-score">（{{ userRank.totalScore.score }}）</span>
           </span>
           <span v-else-if="loading.userRank.totalScore" class="rank-loading">加载中...</span>
           <span v-else class="rank-empty">暂无排名</span>
@@ -55,7 +55,7 @@
         <div class="user-rank">
           <span v-if="userRank.cost" class="rank-info">
             我的排名：第 {{ userRank.cost.rank }} 名
-            <span class="rank-score">（{{ userRank.cost.cost === '无穷大' ? '无穷大' : userRank.cost.cost }} 元）</span>
+            <span class="rank-score">（{{ userRank.cost.cost === '无穷大' ? '无穷大' : userRank.cost.cost }}）</span>
           </span>
           <span v-else-if="loading.userRank.cost" class="rank-loading">加载中...</span>
           <span v-else class="rank-empty">暂无排名</span>
@@ -101,7 +101,7 @@
         <div class="user-rank">
           <span v-if="userRank.testScore" class="rank-info">
             我的排名：第 {{ userRank.testScore.rank }} 名
-            <span class="rank-score">（{{ userRank.testScore.test_score }} 分）</span>
+            <span class="rank-score">（{{ userRank.testScore.test_score }}）</span>
           </span>
           <span v-else-if="loading.userRank.testScore" class="rank-loading">加载中...</span>
           <span v-else class="rank-empty">暂无排名</span>
