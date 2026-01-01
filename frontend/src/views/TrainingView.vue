@@ -366,73 +366,27 @@ const closeDialog = () => {
 
 const downloadImage = async () => {
   try {
-    // 检查是否支持 File System Access API
-    if ('showSaveFilePicker' in window) {
-      let fileHandle = null
-      
-      try {
-        // 先让用户选择保存位置（在用户手势的直接处理程序中）
-        fileHandle = await window.showSaveFilePicker({
-          suggestedName: 'Onsite-image.tar',
-          types: [{
-            description: 'TAR Archive',
-            accept: { 'application/x-tar': ['.tar'] }
-          }]
-        })
-      } catch (err) {
-        // 用户取消了选择保存位置
-        if (err.name === 'AbortError') {
-          message.value = '已取消下载'
-          messageType.value = 'info'
-          return
-        } else {
-          throw err
-        }
-      }
-      
-      // 用户选择了位置，开始下载文件
-      message.value = '正在下载镜像文件...'
-      messageType.value = 'info'
-      
-      const token = localStorage.getItem('token')
-      const response = await axios.get('/api/training/download-image', {
-        headers: { 'Authorization': `Bearer ${token}` },
-        responseType: 'blob'
-      })
-      
-      const blob = new Blob([response.data], { type: 'application/x-tar' })
-      
-      // 写入文件
-      const writable = await fileHandle.createWritable()
-      await writable.write(blob)
-      await writable.close()
-      
-      message.value = '镜像文件下载成功'
-      messageType.value = 'success'
-    } else {
-      // 回退到传统下载方式
-      message.value = '正在准备下载镜像文件...'
-      messageType.value = 'info'
-      
-      const token = localStorage.getItem('token')
-      const response = await axios.get('/api/training/download-image', {
-        headers: { 'Authorization': `Bearer ${token}` },
-        responseType: 'blob'
-      })
-      
-      const blob = new Blob([response.data], { type: 'application/x-tar' })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'Onsite-image.tar'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      
-      message.value = '镜像文件下载成功（已保存到默认下载位置）'
-      messageType.value = 'success'
-    }
+    message.value = '正在准备下载镜像文件...'
+    messageType.value = 'info'
+    
+    const token = localStorage.getItem('token')
+    const response = await axios.get('/api/training/download-image', {
+      headers: { 'Authorization': `Bearer ${token}` },
+      responseType: 'blob'
+    })
+    
+    const blob = new Blob([response.data], { type: 'application/x-tar' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'Onsite-image.tar'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    message.value = '文件开始下载，请在浏览器中查看文件下载情况'
+    messageType.value = 'success'
   } catch (error) {
     console.error('下载镜像失败:', error)
     message.value = '下载镜像失败：' + (error.response?.data?.error || error.message)
