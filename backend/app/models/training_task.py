@@ -1,7 +1,7 @@
 from app.database import get_db_cursor
 
 class TrainingTask:
-    def __init__(self, training_id, user_id, created_time, status, train_cost, test_score, total_score):
+    def __init__(self, training_id, user_id, created_time, status, train_cost, test_score, total_score, server_port=None, end_time=None):
         self.training_id = training_id
         self.user_id = user_id
         self.created_time = created_time
@@ -9,6 +9,8 @@ class TrainingTask:
         self.train_cost = train_cost
         self.test_score = test_score
         self.total_score = total_score
+        self.server_port = server_port
+        self.end_time = end_time
     
     def to_dict(self):
         """转换为字典"""
@@ -18,13 +20,16 @@ class TrainingTask:
             'user_id': self.user_id,
             'createdAt': str(self.created_time) if self.created_time else None,  # 前端使用 createdAt
             'created_time': str(self.created_time) if self.created_time else None,  # 保留原字段
+            'end_time': str(self.end_time) if self.end_time else None,
             'status': self.status,
             'train_cost': self.train_cost,
             'test_score': self.test_score,
             'total_score': self.total_score,
+            'server_port': self.server_port,
             'competition_type': getattr(self, 'competition_type', None),
             'competition_number': getattr(self, 'competition_number', None),
-            'render_cost': getattr(self, 'render_cost', 0.0)
+            'render_cost': getattr(self, 'render_cost', 0.0),
+            'dataset_count': getattr(self, 'dataset_count', 0)
         }
     
     @staticmethod
@@ -36,9 +41,10 @@ class TrainingTask:
                     """
                     SELECT 
                         t.training_id, t.user_id, t.created_time, t.status, 
-                        t.train_cost, t.test_score, t.total_score,
+                        t.train_cost, t.test_score, t.total_score, t.server_port, t.end_time,
                         c.type as competition_type, c.number as competition_number,
-                        COALESCE(SUM(r.render_cost), 0) as render_cost
+                        COALESCE(SUM(r.render_cost), 0) as render_cost,
+                        COUNT(trr.render_id) as dataset_count
                     FROM training_task t
                     LEFT JOIN test_task tt ON t.training_id = tt.training_id
                     LEFT JOIN competition c ON tt.competition_id = c.competition_id
@@ -46,7 +52,7 @@ class TrainingTask:
                     LEFT JOIN render r ON trr.render_id = r.render_id
                     WHERE t.user_id = %s
                     GROUP BY t.training_id, t.user_id, t.created_time, t.status, 
-                             t.train_cost, t.test_score, t.total_score,
+                             t.train_cost, t.test_score, t.total_score, t.server_port, t.end_time,
                              c.type, c.number
                     ORDER BY t.created_time DESC
                     """,
@@ -63,13 +69,17 @@ class TrainingTask:
                         status=row['status'],
                         train_cost=row['train_cost'],
                         test_score=row['test_score'],
-                        total_score=row['total_score']
+                        total_score=row['total_score'],
+                        server_port=row.get('server_port'),
+                        end_time=row.get('end_time')
                     )
                     # 添加赛题信息
                     record.competition_type = row['competition_type']
                     record.competition_number = row['competition_number']
                     # 添加渲染成本
                     record.render_cost = float(row['render_cost']) if row['render_cost'] else 0.0
+                    # 添加数据集数量
+                    record.dataset_count = int(row['dataset_count']) if row.get('dataset_count') else 0
                     records.append(record)
                 
                 return records
@@ -113,7 +123,7 @@ class TrainingTask:
                 cursor.execute(
                     """
                     SELECT training_id, user_id, created_time, status, 
-                           train_cost, test_score, total_score
+                           train_cost, test_score, total_score, server_port, end_time
                     FROM training_task
                     WHERE training_id = %s
                     """,
@@ -129,7 +139,9 @@ class TrainingTask:
                         status=row['status'],
                         train_cost=row['train_cost'],
                         test_score=row['test_score'],
-                        total_score=row['total_score']
+                        total_score=row['total_score'],
+                        server_port=row.get('server_port'),
+                        end_time=row.get('end_time')
                     )
                 return None
         except Exception as e:
@@ -140,16 +152,18 @@ class TrainingTask:
     def create(user_id, status='Training', train_cost=0.0, test_score=0.0, total_score=0.0):
         """创建新的训练记录"""
         try:
+            from datetime import datetime
             with get_db_cursor() as cursor:
-                # 使用数据库自增 ID，不手动计算
+                # 使用 Python 本地时间
+                created_time = datetime.now()
                 cursor.execute(
                     """
                     INSERT INTO training_task 
                     (user_id, created_time, status, train_cost, test_score, total_score)
-                    VALUES (%s, CURRENT_TIMESTAMP, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING training_id, user_id, created_time, status, train_cost, test_score, total_score
                     """,
-                    (user_id, status, train_cost, test_score, total_score)
+                    (user_id, created_time, status, train_cost, test_score, total_score)
                 )
                 row = cursor.fetchone()
                 
@@ -173,10 +187,10 @@ class TrainingTask:
                 cursor.execute(
                     """
                     UPDATE training_task
-                    SET status = %s, train_cost = %s, test_score = %s, total_score = %s
+                    SET status = %s, train_cost = %s, test_score = %s, total_score = %s, server_port = %s, end_time = %s
                     WHERE training_id = %s
                     """,
-                    (self.status, self.train_cost, self.test_score, self.total_score, self.training_id)
+                    (self.status, self.train_cost, self.test_score, self.total_score, self.server_port, self.end_time, self.training_id)
                 )
         except Exception as e:
             print(f"更新训练记录失败: {e}")

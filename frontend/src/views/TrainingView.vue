@@ -1,12 +1,24 @@
 <template>
   <div class="training-view">
-    <h2>训练</h2>
+    <h2>训练与监控界面</h2>
     
     <button @click="showCreateDialog" class="create-btn">
       新增训练
     </button>
     
     <div class="filter-group">
+      <input 
+        v-model="searchTrainingId" 
+        type="text" 
+        placeholder="搜索训练ID" 
+        class="search-input"
+      />
+      <input 
+        v-model="searchDate" 
+        type="date" 
+        placeholder="搜索创建日期" 
+        class="search-input"
+      />
       <select v-model="filterStatus" class="filter-select">
         <option value="">全部状态</option>
         <option value="Training">训练中</option>
@@ -19,6 +31,10 @@
         <option value="week">最近7天</option>
         <option value="month">最近30天</option>
       </select>
+      
+      <button @click="clearFilters" class="clear-btn">
+        清空筛选
+      </button>
     </div>
 
     <div v-if="message" :class="['message', messageType]">
@@ -42,8 +58,13 @@
                 <div class="record-field">
                   <strong>训练ID：</strong>{{ record.training_id }}
                 </div>
-                <div class="record-field">
-                  <strong>创建时间：</strong>{{ record.createdAt }}
+                <div class="record-field-group">
+                  <div class="record-field">
+                    <strong>创建时间：</strong>{{ record.createdAt }}
+                  </div>
+                  <div class="record-field">
+                    <strong>结束时间：</strong>{{ record.end_time || '-' }}
+                  </div>
                 </div>
                 <div class="record-field">
                   <strong>状态：</strong>
@@ -52,23 +73,30 @@
                   </span>
                 </div>
                 <div class="record-field">
-                  <strong>训练成本：</strong>{{ record.train_cost }}
+                  <strong>数据集数量：</strong>{{ record.dataset_count || 0 }}
                 </div>
                 <div class="record-field">
-                  <strong>测试分数：</strong>{{ record.test_score }}
+                  <strong>训练成本：</strong>{{ record.train_cost }}
                 </div>
               </div>
               <div class="record-actions">
-                <button @click="viewDatasets(record.training_id)" class="dataset-btn">
-                  数据集信息
-                </button>
-                <button @click="viewMonitor(record.training_id)" class="monitor-btn">
-                  查看监控
-                </button>
-                <button @click="viewTrainingLog(record.training_id)" class="log-btn">
-                  查看日志
-                </button>
-                <button @click="deleteRecord(record.id)" class="delete-btn">
+                <div class="action-btn-group">
+                  <button @click="viewDatasets(record.training_id)" class="action-btn dataset-btn">
+                    数据集信息
+                  </button>
+                  <button @click="viewTrainingInfo(record.training_id)" class="action-btn info-btn">
+                    训练信息
+                  </button>
+                </div>
+                <div class="action-btn-group">
+                  <button @click="viewMonitor(record.training_id)" class="action-btn monitor-btn">
+                    查看监控
+                  </button>
+                  <button @click="viewTrainingLog(record.training_id)" class="action-btn log-btn">
+                    查看日志
+                  </button>
+                </div>
+                <button @click="deleteRecord(record.id)" class="action-btn delete-btn">
                   删除
                 </button>
               </div>
@@ -98,168 +126,112 @@
       没有符合条件的训练记录
     </div>
 
-    <!-- 新增训练弹窗 -->
-    <div v-if="showDialog" class="dialog-overlay" @click="closeDialog">
-      <div class="dialog-content create-dialog" @click.stop>
-        <div class="dialog-header">
-          <h3>新增训练</h3>
-          <button class="close-btn" @click="closeDialog">×</button>
-        </div>
-        <div class="dialog-body">
-          <div v-if="renderLoading" class="loading">加载数据集中...</div>
-          <div v-else-if="renderRecords.length === 0" class="no-data">暂无可用数据集</div>
-          <div v-else class="render-selection">
-            <h4>选择数据集</h4>
-            <div class="render-list">
-              <div v-for="render in renderRecords" :key="render.render_id" class="render-item">
-                <label class="render-checkbox">
-                  <input 
-                    type="checkbox" 
-                    :value="render.render_id" 
-                    v-model="selectedRenderIds"
-                  />
-                  <div class="render-info">
-                    <div><strong>名称：</strong>{{ render.name || '未命名' }}</div>
-                    <div><strong>状态：</strong>{{ render.status }}</div>
-                    <div><strong>创建时间：</strong>{{ render.created_time }}</div>
-                  </div>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="dialog-footer">
-          <button @click="closeDialog" class="cancel-btn">取消</button>
-          <button @click="createTraining" class="confirm-btn" :disabled="selectedRenderIds.length === 0">
-            确定 (已选 {{ selectedRenderIds.length }})
-          </button>
-        </div>
-      </div>
-    </div>
-    <!-- 监控图表弹窗 -->
-    <div v-if="showMonitorDialog" class="dialog-overlay" @click="closeMonitorDialog">
-      <div class="dialog-content monitor-dialog" @click.stop>
-        <div class="dialog-header">
-          <h3>训练监控 - ID: {{ currentMonitorId }}</h3>
-          <button class="close-btn" @click="closeMonitorDialog">×</button>
-        </div>
-        <div class="dialog-body">
-          <div v-if="monitorLoading" class="loading">加载中...</div>
-          <div v-else-if="monitorError" class="error-message">{{ monitorError }}</div>
-          <div v-else-if="monitorData.length === 0" class="no-data">暂无监控数据</div>
-          <div v-else class="charts-container">
-            <!-- CPU 使用率图表 -->
-            <div class="chart-item">
-              <h4>CPU 使用率 (秒)</h4>
-              <canvas ref="cpuChart"></canvas>
-            </div>
-            
-            <!-- GPU 利用率图表 -->
-            <div class="chart-item">
-              <h4>GPU 利用率 (%)</h4>
-              <canvas ref="gpuChart"></canvas>
-            </div>
-            
-            <!-- 内存使用图表 -->
-            <div class="chart-item">
-              <h4>内存使用 (MB)</h4>
-              <canvas ref="memoryChart"></canvas>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 训练信息弹窗 -->
+    <TrainingInfoDialog 
+      :show="showTrainingInfoDialog"
+      :training-id="currentTrainingInfoId"
+      @close="closeTrainingInfoDialog"
+    />
 
-    <!-- 训练日志弹窗 -->
-    <div v-if="showLogDialog" class="dialog-overlay" @click="closeLogDialog">
-      <div class="dialog-content log-dialog" @click.stop>
-        <div class="dialog-header">
-          <h3>训练日志 - ID: {{ currentLogId }}</h3>
-          <div class="header-actions">
-            <button v-if="!logLoading && !logError" @click="downloadLog" class="download-btn">
-              下载日志
-            </button>
-            <button class="close-btn" @click="closeLogDialog">×</button>
-          </div>
-        </div>
-        <div class="dialog-body">
-          <div v-if="logLoading" class="loading">加载中...</div>
-          <div v-else-if="logError" class="error-message">{{ logError }}</div>
-          <div v-else class="log-content">
-            <pre>{{ logContent }}</pre>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 数据集信息弹窗 -->
-    <div v-if="showDatasetDialog" class="dialog-overlay" @click="closeDatasetDialog">
-      <div class="dialog-content dataset-dialog" @click.stop>
-        <div class="dialog-header">
-          <h3>数据集信息 - 训练ID: {{ currentDatasetTrainingId }}</h3>
-          <button class="close-btn" @click="closeDatasetDialog">×</button>
-        </div>
-        <div class="dialog-body">
-          <div v-if="datasetLoading" class="loading">加载中...</div>
-          <div v-else-if="datasetError" class="error-message">{{ datasetError }}</div>
-          <div v-else-if="datasetRecords.length === 0" class="no-data">该训练未关联数据集</div>
-          <div v-else class="dataset-list">
-            <div v-for="dataset in datasetRecords" :key="dataset.render_id" class="dataset-item">
-              <div class="dataset-field"><strong>名称：</strong>{{ dataset.name || '未命名' }}</div>
-              <div class="dataset-field"><strong>状态：</strong>{{ dataset.status }}</div>
-              <div class="dataset-field"><strong>创建时间：</strong>{{ dataset.created_time }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 其他弹窗 -->
+    <TrainingDialogs
+      :create-dialog="createDialogData"
+      :monitor-dialog="monitorDialogData"
+      :log-dialog="logDialogData"
+      :dataset-dialog="datasetDialogData"
+      @close-create="closeDialog"
+      @confirm-create="createTraining"
+      @close-monitor="closeMonitorDialog"
+      @close-log="closeLogDialog"
+      @download-log="downloadLog"
+      @close-dataset="closeDatasetDialog"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
-import { startTraining, getTrainingResult } from '../api/training'
-import { getTrainingRecords, createTrainingRecord, updateTrainingRecord, deleteTrainingRecord } from '../api/trainingRecords'
 import { io } from 'socket.io-client'
-import { Chart, registerables } from 'chart.js'
 import axios from 'axios'
-
-Chart.register(...registerables)
+import { getTrainingRecords, deleteTrainingRecord } from '../api/trainingRecords'
+import TrainingInfoDialog from '../components/TrainingInfoDialog.vue'
+import TrainingDialogs from '../components/TrainingDialogs.vue'
 
 const message = ref('')
 const messageType = ref('info')
-const showDialog = ref(false)
 const trainingRecords = ref([])
 const loading = ref(true)
 const logRefs = ref({})
-
-// 渲染数据集相关
-const renderRecords = ref([])
-const renderLoading = ref(false)
-const selectedRenderIds = ref([])
-
-// 数据集信息弹窗
-const showDatasetDialog = ref(false)
-const currentDatasetTrainingId = ref(null)
-const datasetRecords = ref([])
-const datasetLoading = ref(false)
-const datasetError = ref('')
 const filterStatus = ref('')
 const filterTime = ref('')
+const searchTrainingId = ref('')
+const searchDate = ref('')
 let socket = null
-// 使用 Set 追踪所有正在训练的 ID，支持并发
 const activeTrainingIds = new Set()
+
+// 训练信息弹窗
+const showTrainingInfoDialog = ref(false)
+const currentTrainingInfoId = ref(null)
+
+// 新增训练弹窗数据
+const createDialogData = ref({
+  show: false,
+  loading: false,
+  renders: [],
+  selectedIds: []
+})
+
+// 监控弹窗数据
+const monitorDialogData = ref({
+  show: false,
+  loading: false,
+  error: '',
+  trainingId: null,
+  data: []
+})
+
+// 日志弹窗数据
+const logDialogData = ref({
+  show: false,
+  loading: false,
+  error: '',
+  trainingId: null,
+  content: ''
+})
+
+// 数据集弹窗数据
+const datasetDialogData = ref({
+  show: false,
+  loading: false,
+  error: '',
+  trainingId: null,
+  datasets: []
+})
 
 // 筛选后的记录
 const filteredRecords = computed(() => {
   let records = trainingRecords.value
   
-  // 按状态筛选
+  // 按训练ID搜索
+  if (searchTrainingId.value) {
+    const searchId = searchTrainingId.value.trim()
+    records = records.filter(r => 
+      String(r.training_id).includes(searchId)
+    )
+  }
+  
+  // 按创建日期搜索（精确到日）
+  if (searchDate.value) {
+    records = records.filter(r => {
+      const recordDate = (r.created_time || r.createdAt || '').split(' ')[0]
+      return recordDate === searchDate.value
+    })
+  }
+  
   if (filterStatus.value) {
     records = records.filter(r => r.status === filterStatus.value)
   }
   
-  // 按时间筛选
   if (filterTime.value) {
     const now = new Date()
     records = records.filter(r => {
@@ -280,23 +252,12 @@ const filteredRecords = computed(() => {
   return records
 })
 
-const showMonitorDialog = ref(false)
-const currentMonitorId = ref(null)
-const monitorData = ref([])
-const monitorLoading = ref(false)
-const monitorError = ref('')
-const cpuChart = ref(null)
-const gpuChart = ref(null)
-const memoryChart = ref(null)
-let cpuChartInstance = null
-let gpuChartInstance = null
-let memoryChartInstance = null
-
-const showLogDialog = ref(false)
-const currentLogId = ref(null)
-const logContent = ref('')
-const logLoading = ref(false)
-const logError = ref('')
+const clearFilters = () => {
+  searchTrainingId.value = ''
+  searchDate.value = ''
+  filterStatus.value = ''
+  filterTime.value = ''
+}
 
 const setLogRef = (id, el) => {
   if (el) {
@@ -313,7 +274,6 @@ const scrollToBottom = (recordId) => {
   })
 }
 
-// 切换日志显示/隐藏
 const toggleLogs = (trainingId) => {
   const record = trainingRecords.value.find(r => r.training_id === trainingId)
   if (record) {
@@ -324,13 +284,12 @@ const toggleLogs = (trainingId) => {
   }
 }
 
-// 从服务器加载训练记录
+// 加载训练记录
 const loadTrainingRecords = async () => {
   loading.value = true
   try {
     const result = await getTrainingRecords()
     
-    // 保存旧记录的日志和展开状态
     const oldRecordsMap = {}
     trainingRecords.value.forEach(record => {
       oldRecordsMap[record.training_id] = {
@@ -339,7 +298,6 @@ const loadTrainingRecords = async () => {
       }
     })
     
-    // 为每条记录添加日志数组和显示状态，保留已有的日志
     trainingRecords.value = (result.data || []).map(record => {
       const oldRecord = oldRecordsMap[record.training_id]
       return {
@@ -363,7 +321,6 @@ const refreshSingleRecord = async (trainingId) => {
     const response = await axios.get(`/api/training/records/${trainingId}`)
     const updatedRecord = response.data.data
     
-    // 找到对应的记录并更新，保留日志和展开状态
     const index = trainingRecords.value.findIndex(r => r.training_id === trainingId)
     if (index !== -1) {
       const oldRecord = trainingRecords.value[index]
@@ -378,174 +335,67 @@ const refreshSingleRecord = async (trainingId) => {
   }
 }
 
-// 保存记录更新到服务器
-const saveRecordUpdate = async (recordId, updateData) => {
-  try {
-    await updateTrainingRecord(recordId, updateData)
-  } catch (error) {
-    console.error('保存记录更新失败:', error)
-  }
-}
-
+// 新增训练弹窗
 const showCreateDialog = async () => {
-  showDialog.value = true
-  selectedRenderIds.value = []
+  createDialogData.value.show = true
+  createDialogData.value.selectedIds = []
+  createDialogData.value.loading = true
   
-  // 加载渲染数据集
-  renderLoading.value = true
   try {
     const token = localStorage.getItem('token')
     const response = await axios.get('/api/render/records', {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` }
     })
-    renderRecords.value = response.data.data
+    createDialogData.value.renders = response.data.data || []
   } catch (error) {
-    console.error('加载渲染数据集失败:', error)
-    renderRecords.value = []
+    console.error('加载数据集失败:', error)
+    createDialogData.value.renders = []
   } finally {
-    renderLoading.value = false
+    createDialogData.value.loading = false
   }
 }
 
 const closeDialog = () => {
-  showDialog.value = false
+  createDialogData.value.show = false
+  createDialogData.value.selectedIds = []
 }
 
-const createTraining = async () => {
+const createTraining = async (selectedIds) => {
+  if (selectedIds.length === 0) return
+  
   try {
-    // 创建训练记录
-    const result = await createTrainingRecord()
-    const trainingId = result.data.training_id
+    const token = localStorage.getItem('token')
+    const response = await axios.post('/api/training/records', {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
     
-    // 创建训练和渲染的关联
-    if (selectedRenderIds.value.length > 0) {
-      try {
-        await axios.post(`/api/render/training/${trainingId}/relation`, {
-          render_ids: selectedRenderIds.value
-        })
-      } catch (error) {
-        console.error('创建数据集关联失败:', error)
-      }
-    }
+    const trainingId = response.data.data.training_id
     
-    // 添加到活跃训练集合
-    activeTrainingIds.add(trainingId)
+    // 使用正确的API路径，一次性提交所有render_ids
+    await axios.post(`/api/render/training/${trainingId}/relation`, {
+      render_ids: selectedIds
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
     
-    // 直接添加新记录到列表顶部，不重新加载全部
-    const newRecord = {
-      ...result.data,
-      logs: [],
-      showLogs: false
-    }
-    trainingRecords.value.unshift(newRecord)
-    
+    message.value = '训练创建成功，正在启动训练...'
+    messageType.value = 'success'
     closeDialog()
+    await loadTrainingRecords()
     
-    message.value = `训练记录已创建 (ID: ${trainingId})，正在启动训练...`
-    messageType.value = 'success'
+    // 启动训练
+    activeTrainingIds.add(trainingId)
+    await axios.post('/api/training/start', {
+      training_id: trainingId
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
     
-    // 启动训练脚本，传递 training_id
-    try {
-      await startTraining({ training_id: trainingId })
-      message.value = `训练 ${trainingId} 已启动，请查看日志`
-      messageType.value = 'success'
-    } catch (error) {
-      message.value = '启动训练失败：' + (error.response?.data?.error || error.message)
-      messageType.value = 'error'
-      // 启动失败，从活跃集合中移除
-      activeTrainingIds.delete(trainingId)
-    }
-  } catch (error) {
-    message.value = '创建训练记录失败：' + (error.response?.data?.error || error.message)
-    messageType.value = 'error'
-  }
-}
-
-const createMonitorRecord = (trainingId, createdAt) => {
-  // 创建监控记录
-  const monitorRecord = {
-    id: 'MONITOR-' + Date.now(),
-    trainingId: trainingId,
-    createdAt: createdAt,
-    status: 'pending',
-    data: []
-  }
-  
-  // 从localStorage读取现有监控记录
-  const stored = localStorage.getItem('monitorRecords')
-  const monitorRecords = stored ? JSON.parse(stored) : []
-  
-  // 添加新记录
-  monitorRecords.unshift(monitorRecord)
-  
-  // 保存到localStorage
-  localStorage.setItem('monitorRecords', JSON.stringify(monitorRecords))
-  
-  // 触发storage事件通知监控页面
-  window.dispatchEvent(new StorageEvent('storage', {
-    key: 'monitorRecords',
-    newValue: JSON.stringify(monitorRecords)
-  }))
-}
-
-const handleStartTraining = async (recordId) => {
-  const record = trainingRecords.value.find(r => r.id === recordId)
-  if (!record) return
-  
-  // 如果已经完成，不允许再次训练
-  if (record.status === 'completed') {
-    message.value = '该训练已完成，无法重复训练'
-    messageType.value = 'error'
-    return
-  }
-  
-  record.loading = true
-  record.logs = []
-  record.csvData = []
-  record.showLogs = true
-  currentTrainingId = recordId
-  
-  // 更新状态为running
-  await saveRecordUpdate(recordId, { status: 'running', logs: [], csvData: [] })
-  updateMonitorStatus(recordId, 'running')
-  
-  message.value = '正在启动训练脚本...'
-  messageType.value = 'info'
-
-  try {
-    await startTraining()
-    message.value = '训练脚本已启动，请查看日志输出'
+    message.value = `训练 ${trainingId} 已启动`
     messageType.value = 'success'
   } catch (error) {
-    message.value = '启动失败：' + (error.response?.data?.error || error.message)
+    message.value = '创建失败：' + (error.response?.data?.error || error.message)
     messageType.value = 'error'
-    record.loading = false
-    currentTrainingId = null
-    // 更新状态为failed
-    await saveRecordUpdate(recordId, { status: 'failed' })
-    updateMonitorStatus(recordId, 'failed')
-  }
-}
-
-
-
-const updateMonitorStatus = (trainingId, status, data = null) => {
-  const stored = localStorage.getItem('monitorRecords')
-  if (!stored) return
-  
-  const monitorRecords = JSON.parse(stored)
-  const monitorRecord = monitorRecords.find(r => r.trainingId === trainingId)
-  
-  if (monitorRecord) {
-    monitorRecord.status = status
-    if (data) {
-      monitorRecord.data = data
-    }
-    localStorage.setItem('monitorRecords', JSON.stringify(monitorRecords))
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'monitorRecords',
-      newValue: JSON.stringify(monitorRecords)
-    }))
   }
 }
 
@@ -566,131 +416,112 @@ const deleteRecord = async (recordId) => {
   }
 }
 
+// 查看监控
 const viewMonitor = async (trainingId) => {
-  currentMonitorId.value = trainingId
-  monitorError.value = ''
-  monitorData.value = []
+  monitorDialogData.value.trainingId = trainingId
+  monitorDialogData.value.error = ''
+  monitorDialogData.value.data = []
+  monitorDialogData.value.show = true
   
-  // 先显示弹窗，但不显示加载状态
-  showMonitorDialog.value = true
-  
-  // 等待弹窗 DOM 渲染
   await nextTick()
   await nextTick()
   
-  // 开始加载数据
-  monitorLoading.value = true
+  monitorDialogData.value.loading = true
   
   try {
-    console.log('正在加载监控数据，training_id:', trainingId)
     const response = await axios.get(`/api/training/monitor/${trainingId}`)
-    console.log('监控数据响应:', response.data)
-    monitorData.value = response.data.data
-    console.log('监控数据长度:', monitorData.value.length)
+    monitorDialogData.value.data = response.data.data
     
-    if (monitorData.value.length === 0) {
-      monitorError.value = '暂无监控数据'
-      monitorLoading.value = false
-      return
+    if (monitorDialogData.value.data.length === 0) {
+      monitorDialogData.value.error = '暂无监控数据'
     }
-    
-    // 数据加载完成，隐藏加载状态
-    monitorLoading.value = false
-    
-    // 等待图表容器渲染
-    await nextTick()
-    await nextTick()
-    
-    console.log('开始绘制图表')
-    console.log('cpuChart ref:', cpuChart.value)
-    console.log('gpuChart ref:', gpuChart.value)
-    console.log('memoryChart ref:', memoryChart.value)
-    
-    // 使用 setTimeout 确保 DOM 完全渲染
-    setTimeout(() => {
-      drawCharts()
-    }, 100)
   } catch (error) {
     console.error('加载监控数据失败:', error)
-    monitorError.value = error.response?.data?.error || '加载监控数据失败'
-    monitorLoading.value = false
+    monitorDialogData.value.error = error.response?.data?.error || '加载监控数据失败'
+  } finally {
+    monitorDialogData.value.loading = false
   }
 }
 
 const closeMonitorDialog = () => {
-  showMonitorDialog.value = false
-  if (cpuChartInstance) cpuChartInstance.destroy()
-  if (gpuChartInstance) gpuChartInstance.destroy()
-  if (memoryChartInstance) memoryChartInstance.destroy()
+  monitorDialogData.value.show = false
 }
 
+// 查看训练信息
+const viewTrainingInfo = (trainingId) => {
+  currentTrainingInfoId.value = trainingId
+  showTrainingInfoDialog.value = true
+}
+
+const closeTrainingInfoDialog = () => {
+  showTrainingInfoDialog.value = false
+  currentTrainingInfoId.value = null
+}
+
+// 查看训练日志
 const viewTrainingLog = async (trainingId) => {
-  currentLogId.value = trainingId
-  logError.value = ''
-  logContent.value = ''
-  showLogDialog.value = true
-  logLoading.value = true
+  logDialogData.value.trainingId = trainingId
+  logDialogData.value.error = ''
+  logDialogData.value.content = ''
+  logDialogData.value.show = true
+  logDialogData.value.loading = true
   
   try {
     const response = await axios.get(`/api/training/logs/${trainingId}`)
-    logContent.value = response.data.data
-    logLoading.value = false
+    logDialogData.value.content = response.data.data
   } catch (error) {
     console.error('加载训练日志失败:', error)
-    logError.value = error.response?.data?.error || '加载训练日志失败'
-    logLoading.value = false
+    logDialogData.value.error = error.response?.data?.error || '加载训练日志失败'
+  } finally {
+    logDialogData.value.loading = false
   }
 }
 
 const closeLogDialog = () => {
-  showLogDialog.value = false
-  logContent.value = ''
-  currentLogId.value = null
+  logDialogData.value.show = false
+  logDialogData.value.content = ''
+  logDialogData.value.trainingId = null
 }
 
-const downloadLog = () => {
-  if (!logContent.value) return
+const downloadLog = (content) => {
+  if (!content) return
   
-  // 创建 Blob 对象
-  const blob = new Blob([logContent.value], { type: 'text/plain;charset=utf-8' })
-  
-  // 创建下载链接
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `train${currentLogId.value}_log.txt`
+  link.download = `train${logDialogData.value.trainingId}_log.txt`
   
-  // 触发下载
   document.body.appendChild(link)
   link.click()
   
-  // 清理
   document.body.removeChild(link)
   window.URL.revokeObjectURL(url)
 }
 
+// 查看数据集
 const viewDatasets = async (trainingId) => {
-  currentDatasetTrainingId.value = trainingId
-  datasetError.value = ''
-  datasetRecords.value = []
-  showDatasetDialog.value = true
-  datasetLoading.value = true
+  datasetDialogData.value.trainingId = trainingId
+  datasetDialogData.value.error = ''
+  datasetDialogData.value.datasets = []
+  datasetDialogData.value.show = true
+  datasetDialogData.value.loading = true
   
   try {
     const response = await axios.get(`/api/render/training/${trainingId}`)
-    datasetRecords.value = response.data.data
-    datasetLoading.value = false
+    datasetDialogData.value.datasets = response.data.data
   } catch (error) {
     console.error('加载数据集信息失败:', error)
-    datasetError.value = error.response?.data?.error || '加载数据集信息失败'
-    datasetLoading.value = false
+    datasetDialogData.value.error = error.response?.data?.error || '加载数据集信息失败'
+  } finally {
+    datasetDialogData.value.loading = false
   }
 }
 
 const closeDatasetDialog = () => {
-  showDatasetDialog.value = false
-  datasetRecords.value = []
-  currentDatasetTrainingId.value = null
+  datasetDialogData.value.show = false
+  datasetDialogData.value.datasets = []
+  datasetDialogData.value.trainingId = null
 }
 
 const getStatusClass = (status) => {
@@ -713,137 +544,9 @@ const getStatusText = (status) => {
   return textMap[status] || status
 }
 
-const drawCharts = () => {
-  console.log('drawCharts 被调用')
-  console.log('monitorData.value:', monitorData.value)
-  
-  if (monitorData.value.length === 0) {
-    console.log('没有数据，退出')
-    return
-  }
-  
-  const labels = monitorData.value.map(d => d.timestamp)
-  console.log('时间标签:', labels)
-  
-  if (cpuChart.value) {
-    console.log('绘制 CPU 图表')
-    if (cpuChartInstance) cpuChartInstance.destroy()
-    const cpuData = monitorData.value.map(d => parseFloat(d.cpu_usage_total_seconds))
-    console.log('CPU 数据:', cpuData)
-    
-    cpuChartInstance = new Chart(cpuChart.value, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'CPU 使用 (秒)',
-          data: cpuData,
-          borderColor: 'rgb(75, 192, 192)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
-          tension: 0.1
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: true } }
-      }
-    })
-    console.log('CPU 图表创建完成')
-  } else {
-    console.log('cpuChart ref 不存在')
-  }
-  
-  if (gpuChart.value) {
-    console.log('绘制 GPU 图表')
-    if (gpuChartInstance) gpuChartInstance.destroy()
-    const gpuData = monitorData.value.map(d => parseFloat(d['gpu_utilization_total(%)']))
-    console.log('GPU 数据:', gpuData)
-    
-    gpuChartInstance = new Chart(gpuChart.value, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'GPU 利用率 (%)',
-          data: gpuData,
-          borderColor: 'rgb(255, 99, 132)',
-          backgroundColor: 'rgba(255, 99, 132, 0.2)',
-          tension: 0.1
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: true } },
-        scales: { y: { beginAtZero: true, max: 100 } }
-      }
-    })
-    console.log('GPU 图表创建完成')
-  } else {
-    console.log('gpuChart ref 不存在')
-  }
-  
-  if (memoryChart.value) {
-    console.log('绘制内存图表')
-    if (memoryChartInstance) memoryChartInstance.destroy()
-    const gpuMemData = monitorData.value.map(d => parseFloat(d.gpu_memory_total_mb))
-    const sysMemData = monitorData.value.map(d => parseFloat(d.memory_usage_total_mb))
-    console.log('GPU 内存数据:', gpuMemData)
-    console.log('系统内存数据:', sysMemData)
-    
-    memoryChartInstance = new Chart(memoryChart.value, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [
-          {
-            label: 'GPU 内存 (MB)',
-            data: gpuMemData,
-            borderColor: 'rgb(153, 102, 255)',
-            backgroundColor: 'rgba(153, 102, 255, 0.2)',
-            tension: 0.1
-          },
-          {
-            label: '系统内存 (MB)',
-            data: sysMemData,
-            borderColor: 'rgb(255, 159, 64)',
-            backgroundColor: 'rgba(255, 159, 64, 0.2)',
-            tension: 0.1
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: true } }
-      }
-    })
-    console.log('内存图表创建完成')
-  } else {
-    console.log('memoryChart ref 不存在')
-  }
-}
-
-const deleteMonitorRecord = (trainingId) => {
-  const stored = localStorage.getItem('monitorRecords')
-  if (!stored) return
-  
-  let monitorRecords = JSON.parse(stored)
-  monitorRecords = monitorRecords.filter(r => r.trainingId !== trainingId)
-  
-  localStorage.setItem('monitorRecords', JSON.stringify(monitorRecords))
-  window.dispatchEvent(new StorageEvent('storage', {
-    key: 'monitorRecords',
-    newValue: JSON.stringify(monitorRecords)
-  }))
-}
-
 onMounted(() => {
-  // 加载训练记录
   loadTrainingRecords()
   
-  // 连接WebSocket
   socket = io('http://localhost:8000')
 
   socket.on('connect', () => {
@@ -852,7 +555,6 @@ onMounted(() => {
 
   socket.on('training_log', (data) => {
     console.log('收到日志:', data)
-    // 使用消息中的 training_id，而不是全局变量
     const trainingId = data.training_id
     if (trainingId && activeTrainingIds.has(trainingId)) {
       const record = trainingRecords.value.find(r => r.training_id === trainingId)
@@ -861,7 +563,6 @@ onMounted(() => {
           record.logs = []
         }
         record.logs.push(data.message)
-        // 不自动展开日志，保持当前状态
         if (record.showLogs) {
           scrollToBottom(trainingId)
         }
@@ -879,14 +580,12 @@ onMounted(() => {
           message.value = `训练 ${trainingId} 完成！`
           messageType.value = 'success'
           
-          // 只刷新这一条记录，不影响其他记录
           await refreshSingleRecord(trainingId)
         } else {
           message.value = `训练 ${trainingId} 失败：${data.message}`
           messageType.value = 'error'
         }
       }
-      // 从活跃集合中移除
       activeTrainingIds.delete(trainingId)
     }
   })
@@ -922,7 +621,7 @@ h2 {
   border: none;
   border-radius: 4px;
   font-size: 1rem;
-  background: #764ba2 100%;
+  background: #764ba2;
   color: white;
   cursor: pointer;
   transition: opacity 0.3s;
@@ -937,6 +636,30 @@ h2 {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: white;
+  transition: border-color 0.3s;
+  min-width: 150px;
+}
+
+.search-input:hover {
+  border-color: #9c27b0;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #9c27b0;
+}
+
+.search-input::placeholder {
+  color: #999;
 }
 
 .filter-select {
@@ -958,6 +681,22 @@ h2 {
   border-color: #9c27b0;
 }
 
+.clear-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: white;
+  color: #666;
+  transition: all 0.3s;
+}
+
+.clear-btn:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
 .message {
   padding: 1rem;
   border-radius: 4px;
@@ -977,6 +716,28 @@ h2 {
 .message.error {
   background: #ffebee;
   color: #c62828;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #9c27b0;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .records-section {
@@ -1051,6 +812,12 @@ h4 {
   flex: 1;
 }
 
+.record-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .record-field {
   color: #555;
   font-size: 0.95rem;
@@ -1093,101 +860,65 @@ h4 {
 
 .record-actions {
   display: flex;
-  gap: 1rem;
-  flex-wrap: nowrap;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
-.monitor-btn,
-.log-btn,
-.dataset-btn,
-.start-btn,
-.refresh-btn,
-.delete-btn {
-  padding: 0.4rem 1rem;
+.record-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.action-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  padding: 0.5rem 1rem;
   border: none;
   border-radius: 4px;
   font-size: 0.85rem;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: opacity 0.3s;
   white-space: nowrap;
   outline: none;
 }
 
-.monitor-btn:focus,
-.log-btn:focus,
-.dataset-btn:focus,
-.start-btn:focus,
-.refresh-btn:focus,
-.delete-btn:focus {
+.action-btn:hover {
+  opacity: 0.85;
+}
+
+.action-btn:focus {
   outline: none;
 }
 
 .monitor-btn {
-  background: #3498db;
+  background: #007bff;
   color: white;
-}
-
-.monitor-btn:hover {
-  background: #2980b9;
 }
 
 .log-btn {
-  background: #f39c12;
+  background: #007bff;
   color: white;
-}
-
-.log-btn:hover {
-  background: #e67e22;
 }
 
 .dataset-btn {
-  background: #16a085;
+  background: #17a2b8;
   color: white;
 }
 
-.dataset-btn:hover {
-  background: #138d75;
-}
-
-.start-btn {
-  background: #42b983;
+.info-btn {
+  background: #17a2b8;
   color: white;
-}
-
-.start-btn:hover:not(:disabled) {
-  background: #359268;
-}
-
-.refresh-btn {
-  background: #3498db;
-  color: white;
-}
-
-.refresh-btn:hover:not(:disabled) {
-  background: #2980b9;
 }
 
 .delete-btn {
-  background: #e74c3c;
+  background: #dc3545;
   color: white;
-}
-
-.delete-btn:hover:not(:disabled) {
-  background: #c0392b;
-}
-
-.completed-badge {
-  padding: 0.5rem 1.5rem;
-  background: #e8f5e9;
-  color: #2e7d32;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  font-weight: bold;
-}
-
-button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
 }
 
 .log-section {
@@ -1238,345 +969,10 @@ button:disabled {
   word-break: break-all;
 }
 
-.result-section {
-  margin-top: 1rem;
-}
-
-.table-container {
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-}
-
-thead {
-  background: #f5f5f5;
-}
-
-th,
-td {
-  padding: 0.75rem;
-  text-align: left;
-  border-bottom: 1px solid #ddd;
-  font-size: 0.9rem;
-}
-
-th {
-  font-weight: bold;
-  color: #555;
-}
-
-tbody tr:hover {
-  background: #f9f9f9;
-}
-
-/* 弹窗样式 */
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.dialog-content {
-  background: white;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 600px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #eee;
-}
-
-.dialog-header h3 {
-  margin: 0;
-  color: #333;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.download-btn {
-  padding: 0.5rem 1rem;
-  background: #3498db;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.download-btn:hover {
-  background: #2980b9;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 2rem;
-  color: #999;
-  cursor: pointer;
-  padding: 0;
-  width: 2rem;
-  height: 2rem;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #333;
-}
-
-.dialog-body {
-  padding: 2rem;
-  min-height: 200px;
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  padding: 1.5rem;
-  border-top: 1px solid #eee;
-}
-
-.cancel-btn,
-.confirm-btn {
-  padding: 0.5rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.cancel-btn {
-  background: #e0e0e0;
-  color: #333;
-}
-
-.cancel-btn:hover {
-  background: #d0d0d0;
-}
-
-.confirm-btn {
-  background: #9c27b0;
-  color: white;
-}
-
-.confirm-btn:hover {
-  background: #7b1fa2;
-}
-
-.monitor-dialog {
-  max-width: 1200px;
-  width: 95%;
-}
-
-.monitor-dialog .dialog-body {
-  padding: 2rem;
-  min-height: 600px;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.charts-container {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.chart-item {
-  background: #f9f9f9;
-  padding: 1.5rem;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-}
-
-.chart-item h4 {
-  margin: 0 0 1rem 0;
-  color: #333;
-  font-size: 1.1rem;
-}
-
-.chart-item canvas {
-  width: 100% !important;
-  height: 300px !important;
-}
-
-.loading,
 .no-data {
   text-align: center;
   padding: 3rem;
-  color: #666;
+  color: #999;
   font-size: 1.1rem;
-}
-
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem;
-  color: #666;
-}
-
-.loading-spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #9c27b0;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 1rem;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.log-dialog {
-  max-width: 1000px;
-  width: 90%;
-}
-
-.log-dialog .dialog-body {
-  padding: 0;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.log-content {
-  background: #1e1e1e;
-  padding: 1.5rem;
-  min-height: 500px;
-}
-
-.log-content pre {
-  margin: 0;
-  color: #d4d4d4;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
-  white-space: pre-wrap;
-  word-break: break-all;
-  line-height: 1.5;
-}
-
-.error-message {
-  text-align: center;
-  padding: 3rem;
-  color: #e74c3c;
-  font-size: 1.1rem;
-}
-
-.create-dialog {
-  max-width: 700px;
-  width: 90%;
-}
-
-.create-dialog .dialog-body {
-  padding: 1.5rem;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.render-selection h4 {
-  margin: 0 0 1rem 0;
-  color: #333;
-}
-
-.render-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.render-item {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  transition: all 0.3s;
-}
-
-.render-item:hover {
-  border-color: #9c27b0;
-  background: #f9f9f9;
-}
-
-.render-checkbox {
-  display: flex;
-  align-items: flex-start;
-  padding: 1rem;
-  cursor: pointer;
-  gap: 1rem;
-}
-
-.render-checkbox input[type="checkbox"] {
-  margin-top: 0.25rem;
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-}
-
-.render-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  color: #555;
-}
-
-.dataset-dialog {
-  max-width: 700px;
-  width: 90%;
-}
-
-.dataset-dialog .dialog-body {
-  padding: 1.5rem;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-
-.dataset-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.dataset-item {
-  padding: 1rem;
-  background: #f9f9f9;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
-}
-
-.dataset-field {
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-  color: #555;
-}
-
-.dataset-field:last-child {
-  margin-bottom: 0;
 }
 </style>
-

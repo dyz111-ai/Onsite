@@ -126,8 +126,12 @@ def create_training_record():
 
 @training_bp.route('/records/<int:training_id>', methods=['DELETE'])
 def delete_training_record(training_id):
-    """删除训练记录"""
+    """删除训练记录并终止训练进程"""
     try:
+        # 先终止训练进程
+        TrainingService.kill_training_processes(training_id)
+        
+        # 删除训练记录
         TrainingTask.delete(training_id)
         return jsonify({"message": "训练记录删除成功"}), 200
     except Exception as e:

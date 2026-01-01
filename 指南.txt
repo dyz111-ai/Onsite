@@ -2,10 +2,11 @@ nvidia-smi
 kill -9 xxx
 ps aux | grep pytho
 
-venv\Scripts\activate
 deactivate
-python -m app.main
+venv\Scripts\activate
 cd backend
+python -m app.main
+
 
 cd frontend
 npm run dev
