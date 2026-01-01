@@ -27,8 +27,8 @@
 表: competition
 ------------------------------
   competition_id       integer              NOT NULL
-  created_time         date                 NOT NULL
-  end_time             date                 NOT NULL
+  created_time         TIMESTAMP                 NOT NULL
+  end_time             TIMESTAMP                 NOT NULL
   status               character varying    NOT NULL
   type                 character varying    NOT NULL
   number               integer              NOT NULL
@@ -49,7 +49,7 @@
   render_id            integer              NOT NULL
   user_id              integer              NOT NULL
   status               character varying    NOT NULL
-  created_time         date                 NOT NULL
+  created_time         TIMESTAMP            NOT NULL
   render_cost          double precision     NOT NULL
   name                 text
 表: test_task
@@ -67,12 +67,13 @@
 ------------------------------
   training_id          integer              NOT NULL
   user_id              integer              NOT NULL
-  created_time         date                 NOT NULL
+  created_time         TIMESTAMP                 NOT NULL
+  end_time             TIMESTAMP                 NOT NULL
   status               character varying    NOT NULL
   train_cost           double precision     
   test_score           double precision     
   total_score          double precision     
-
+  server_port          INTEGER
   --4.渲染任务表
 CREATE TABLE IF NOT EXISTS renderrender id SERIAL PRIMARY KEY.USer id INTEGER NOT NULL,status VARCHAR(10)NOT NULL CHEcK(status IN('Rendering', 'completed')),
 created time DATE NOT NULL,render cOSt FLOAT NOT NULL

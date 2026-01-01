@@ -17,9 +17,6 @@
           <router-link to="/evaluation" class="nav-item">测试评估</router-link>
         </li>
         <li>
-          <router-link to="/result" class="nav-item">结果展示</router-link>
-        </li>
-        <li>
           <router-link to="/leaderboard" class="nav-item">排行榜</router-link>
         </li>
         <!-- 添加管理员页面链接 -->

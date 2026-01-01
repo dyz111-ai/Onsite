@@ -5,18 +5,18 @@ from app import app, socketio
 from app.api.auth import auth_bp
 from app.api.training import training_bp
 from app.api.train_render import render_bp
-from app.api.competition import competition_bp
 from app.api.leaderboard import leaderboard_bp
 from app.api.train_competition import training_competition_bp
 from app.api.task_submit import task_submit_bp
+from app.api.competition import competition_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(training_bp)
 app.register_blueprint(render_bp)
-app.register_blueprint(competition_bp)
-app.register_blueprint(leaderboard_bp)
 app.register_blueprint(training_competition_bp)
 app.register_blueprint(task_submit_bp)
+app.register_blueprint(leaderboard_bp)
+app.register_blueprint(competition_bp)
 
 @app.route('/')
 def root():

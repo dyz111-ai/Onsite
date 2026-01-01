@@ -1,5 +1,5 @@
 # 训练相关的 API 路由
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 import threading
 import os
 import csv
@@ -126,8 +126,12 @@ def create_training_record():
 
 @training_bp.route('/records/<int:training_id>', methods=['DELETE'])
 def delete_training_record(training_id):
-    """删除训练记录"""
+    """删除训练记录并终止训练进程"""
     try:
+        # 先终止训练进程
+        TrainingService.kill_training_processes(training_id)
+        
+        # 删除训练记录
         TrainingTask.delete(training_id)
         return jsonify({"message": "训练记录删除成功"}), 200
     except Exception as e:
@@ -173,5 +177,30 @@ def get_training_logs(training_id):
             log_content = f.read()
         
         return jsonify({"data": log_content}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@training_bp.route('/download-image', methods=['GET'])
+def download_image():
+    """下载Docker镜像文件"""
+    try:
+        # 获取项目根目录
+        current_dir = os.path.dirname(__file__)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+        
+        # 构建镜像文件路径
+        image_path = os.path.join(project_root, 'cache', 'docker', 'Onsite-image.tar')
+        
+        if not os.path.exists(image_path):
+            return jsonify({"error": "镜像文件不存在"}), 404
+        
+        # 发送文件
+        return send_file(
+            image_path,
+            as_attachment=True,
+            download_name='Onsite-image.tar',
+            mimetype='application/x-tar'
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
