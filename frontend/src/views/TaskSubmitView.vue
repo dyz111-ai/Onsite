@@ -243,12 +243,13 @@ const downloading = ref({})
 // Download dataset archive
 const downloadDataset = async (renderId) => {
   // 构建前端文件路径 - 直接访问public目录下的文件
-  const downloadUrl = `/cache/render/dataset/${competition.id}.tar.gz`;
+  console.log('下载文件:', renderId)
+  const downloadUrl = `/cache/render/dataset/${renderId}.tar.gz`;
   
   // 创建一个临时的a标签用于下载
   const link = document.createElement('a');
   link.href = downloadUrl;
-  link.download = `${fileName}${fileExtension}`;
+  link.download = `${renderId}.tar.gz`;
   link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
