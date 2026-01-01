@@ -87,3 +87,17 @@ class TaskSubmit:
                 )
         except Exception as e:
             print(f"Update failed: {e}")
+
+    def update_cost(render_id: int, render_cost: float):
+        try:
+            with get_db_cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE render
+                    SET render_cost = %s
+                    WHERE render_id = %s
+                    """,
+                    (render_cost, render_id,)
+                )
+        except Exception as e:
+            print(f"Update failed: {e}")

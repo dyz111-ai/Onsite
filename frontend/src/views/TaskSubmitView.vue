@@ -67,37 +67,22 @@
             
             <div class="render-field">
               <strong>资源消耗：</strong>
-              <span class="render-time">{{ formatTime(render.render_cost) }}</span>
-            </div>
-            
-            <div v-if="render.description" class="render-field">
-              <strong>描述：</strong>
-              <span class="render-description">{{ render.description }}</span>
-            </div>
-            
-            <div v-if="render.file_count !== undefined" class="render-field">
-              <strong>文件数量：</strong>
-              <span class="render-count">{{ render.file_count }} 个</span>
-            </div>
-            
-            <div v-if="render.size !== undefined" class="render-field">
-              <strong>数据大小：</strong>
-              <span class="render-size">{{ formatSize(render.size) }}</span>
+              <span class="render-time">{{ render.render_cost }}</span>
             </div>
           </div>
           
           <div class="render-card-footer">
-            <button @click="previewVideo(render.render_id)" class="video-btn">
+            <button 
+              @click="previewVideo(render.render_id)" 
+              class="video-btn"
+              :disabled="!render.status || render.status.toLowerCase() !== 'completed'"
+            >
               预览视频
-            </button>
-            <button v-if="allowDelete" @click="deleteRender(render.render_id)" class="delete-btn">
-              删除
             </button>
             <!-- New download button - only show for completed renders -->
             <button 
-              v-if="render.status === 'Completed'" 
               @click="downloadDataset(render.render_id)" 
-              :disabled="downloading[render.render_id]"
+              :disabled="!render.status || render.status.toLowerCase() !== 'completed'"
               class="download-btn"
             >
               {{ downloading[render.render_id] ? '下载中...' : '下载' }}
@@ -1008,6 +993,16 @@ onMounted(() => {
   background: #2980b9;
 }
 
+.video-btn:hover:not([disabled]) {
+  background: #303f9f;
+  transform: translateY(-1px);
+}
+
+.video-btn:disabled {
+  background: #b3c1dc;
+  cursor: not-allowed;
+  transform: none;
+}
 .download-btn {
   background: #3f51b5;
   color: white;

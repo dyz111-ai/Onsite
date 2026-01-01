@@ -3,6 +3,7 @@ import threading
 import os
 import platform
 from app.models.task_submit import TaskSubmit
+from app.models.training_task import TrainingTask
 from app.utils.file_utils import save_file
 from flask import current_app
 
@@ -42,6 +43,9 @@ class TaskSubmitService:
                             text=True
                         )
                         
+                        cost = TrainingTask.calculate_cost_from_csv(os.path.join(base_dir, "..", "frontend" ,"cache", "render", "cost", str(render_id)+".csv"))
+                        TaskSubmit.update_cost(render_id, cost)
+
                         # Only set published if script completed successfully (exit code 0)
                         TaskSubmit.set_completed(render_id)
                         if result.returncode == 0:

@@ -35,7 +35,7 @@ LOCAL_VIDEO_PATH="$LOCAL_CACHE_DIR/video/$RENDER_ID.mp4"
 # Server information
 SERVER_USER="root"
 SERVER_HOST="connect.cqa1.seetacloud.com"
-SERVER_PORT="19567"
+SERVER_PORT="44939"
 REMOTE_CACHE_DIR="/root/autodl-tmp/cache/$TASK"
 
 # Check if local files exist

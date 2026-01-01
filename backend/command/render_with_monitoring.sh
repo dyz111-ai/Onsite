@@ -30,7 +30,8 @@ fi
 LOCAL_CACHE_DIR="../frontend/cache/$TASK"
 LOCAL_DESTINATION_PATH="$LOCAL_CACHE_DIR/destination/$RENDER_ID.json"
 LOCAL_XOSC_PATH="$LOCAL_CACHE_DIR/OpenSCENARIO/$RENDER_ID.xosc"
-LOCAL_VIDEO_PATH="$LOCAL_CACHE_DIR/video/$RENDER_ID.mp4"
+LOCAL_COST_PATH="$LOCAL_CACHE_DIR/cost"
+LOCAL_VIDEO_PATH="$LOCAL_CACHE_DIR/video"
 
 # Server information
 SERVER_USER="root"
@@ -79,6 +80,9 @@ fi
 
 
 echo "Render task started successfully with ID: $RENDER_ID"
+mkdir -p $LOCAL_COST_PATH
+scp -P $SERVER_PORT $SERVER_USER@$SERVER_HOST:/root/autodl-tmp/docker-monitor/runs/render_$RENDER_ID/resource_usage.csv $LOCAL_COST_PATH/$RENDER_ID.csv
+
 
 # generate video
 echo "Generating video..."

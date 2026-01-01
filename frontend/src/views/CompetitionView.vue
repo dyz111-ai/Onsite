@@ -62,21 +62,21 @@
               <button 
                 class="preview-btn" 
                 @click="previewVideo(comp)" 
-                :disabled="selectedListType === 'C'"
+                :disabled="selectedListType === 'C' || comp.status !== 'Published'"
               >
                 预览
               </button>
               <button 
                 class="download-btn" 
                 @click="downloadFile(comp, 'OpenSCENARIO')" 
-                :disabled="selectedListType === 'C'"
+                :disabled="selectedListType === 'C' || comp.status !== 'Published'"
               >
                 下载OpenSCENARIO
               </button>
               <button 
                 class="download-btn" 
                 @click="downloadFile(comp, 'destination')" 
-                :disabled="selectedListType === 'C'"
+                :disabled="selectedListType === 'C' || comp.status !== 'Published'"
               >
                 下载Destination
               </button>
