@@ -509,3 +509,214 @@ class TrainingTask:
         except Exception as e:
             print(f"获取用户最高分记录失败: {e}")
             raise e
+    
+    @staticmethod
+    def get_user_rank_in_total_score(user_id):
+        """
+        获取指定用户在总分排行榜中的排名
+        返回：{'rank': 排名, 'score': 分数, 'created_time': 创建时间}
+        """
+        try:
+            with get_db_cursor(commit=False) as cursor:
+                query = """
+                WITH all_participants AS (
+                    SELECT participant_id as user_id, account FROM participant
+                ),
+                ranked_tasks AS (
+                    SELECT 
+                        p.user_id,
+                        p.account,
+                        t.training_id,
+                        t.created_time,
+                        t.total_score,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY p.user_id 
+                            ORDER BY 
+                                COALESCE(t.total_score, 0) DESC,
+                                t.created_time DESC,
+                                p.account ASC
+                        ) as rank_within_user,
+                        CASE WHEN t.training_id IS NOT NULL THEN 1 ELSE 0 END as has_training_data
+                    FROM all_participants p
+                    LEFT JOIN training_task t ON p.user_id = t.user_id
+                ),
+                ranked_all AS (
+                    SELECT 
+                        ROW_NUMBER() OVER (
+                            ORDER BY 
+                                rt.has_training_data DESC,
+                                COALESCE(rt.total_score, 0) DESC,
+                                rt.created_time DESC,
+                                rt.account ASC
+                        ) as global_rank,
+                        rt.user_id,
+                        rt.account,
+                        COALESCE(rt.total_score, 0) as max_score,
+                        rt.created_time
+                    FROM ranked_tasks rt
+                    WHERE rt.rank_within_user = 1
+                )
+                SELECT 
+                    global_rank,
+                    max_score,
+                    created_time
+                FROM ranked_all
+                WHERE user_id = %s
+                """
+                
+                cursor.execute(query, (user_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    return {
+                        'rank': result['global_rank'],
+                        'score': float(result['max_score']),
+                        'created_time': result['created_time'].strftime('%Y-%m-%d %H:%M:%S') if result['created_time'] else None
+                    }
+                return None
+        except Exception as e:
+            print(f"获取用户总分排名失败: {e}")
+            raise e
+    
+    @staticmethod
+    def get_user_rank_in_cost(user_id):
+        """
+        获取指定用户在训练成本排行榜中的排名
+        返回：{'rank': 排名, 'cost': 成本, 'created_time': 创建时间}
+        """
+        try:
+            with get_db_cursor(commit=False) as cursor:
+                query = """
+                WITH all_participants AS (
+                    SELECT participant_id as user_id, account FROM participant
+                ),
+                ranked_tasks AS (
+                    SELECT 
+                        p.user_id,
+                        p.account,
+                        t.training_id,
+                        t.created_time,
+                        t.train_cost,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY p.user_id 
+                            ORDER BY 
+                                CASE 
+                                    WHEN t.train_cost IS NULL OR t.train_cost = 0 THEN 1 ELSE 0 END ASC,
+                                t.train_cost ASC,
+                                t.created_time DESC,
+                                p.account ASC
+                        ) as rank_within_user,
+                        CASE WHEN t.training_id IS NOT NULL THEN 1 ELSE 0 END as has_training_data
+                    FROM all_participants p
+                    LEFT JOIN training_task t ON p.user_id = t.user_id
+                ),
+                ranked_all AS (
+                    SELECT 
+                        ROW_NUMBER() OVER (
+                            ORDER BY 
+                                rt.has_training_data DESC,
+                                CASE 
+                                    WHEN rt.train_cost IS NULL OR rt.train_cost = 0 THEN 1 ELSE 0 END ASC,
+                                rt.train_cost ASC,
+                                rt.created_time DESC,
+                                rt.account ASC
+                        ) as global_rank,
+                        rt.user_id,
+                        rt.account,
+                        CASE 
+                            WHEN rt.train_cost IS NULL OR rt.train_cost = 0 THEN '无穷大' 
+                            ELSE rt.train_cost::TEXT 
+                        END as min_cost,
+                        rt.created_time
+                    FROM ranked_tasks rt
+                    WHERE rt.rank_within_user = 1
+                )
+                SELECT 
+                    global_rank,
+                    min_cost,
+                    created_time
+                FROM ranked_all
+                WHERE user_id = %s
+                """
+                
+                cursor.execute(query, (user_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    return {
+                        'rank': result['global_rank'],
+                        'cost': result['min_cost'] if result['min_cost'] == '无穷大' else float(result['min_cost']),
+                        'created_time': result['created_time'].strftime('%Y-%m-%d %H:%M:%S') if result['created_time'] else None
+                    }
+                return None
+        except Exception as e:
+            print(f"获取用户成本排名失败: {e}")
+            raise e
+    
+    @staticmethod
+    def get_user_rank_in_test_score(user_id):
+        """
+        获取指定用户在测试分数排行榜中的排名
+        返回：{'rank': 排名, 'test_score': 测试分数, 'created_time': 创建时间}
+        """
+        try:
+            with get_db_cursor(commit=False) as cursor:
+                query = """
+                WITH all_participants AS (
+                    SELECT participant_id as user_id, account FROM participant
+                ),
+                ranked_tasks AS (
+                    SELECT 
+                        p.user_id,
+                        p.account,
+                        t.training_id,
+                        t.created_time,
+                        t.test_score,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY p.user_id 
+                            ORDER BY 
+                                COALESCE(t.test_score, 0) DESC,
+                                t.created_time DESC,
+                                p.account ASC
+                        ) as rank_within_user,
+                        CASE WHEN t.training_id IS NOT NULL THEN 1 ELSE 0 END as has_training_data
+                    FROM all_participants p
+                    LEFT JOIN training_task t ON p.user_id = t.user_id
+                ),
+                ranked_all AS (
+                    SELECT 
+                        ROW_NUMBER() OVER (
+                            ORDER BY 
+                                rt.has_training_data DESC,
+                                COALESCE(rt.test_score, 0) DESC,
+                                rt.created_time DESC,
+                                rt.account ASC
+                        ) as global_rank,
+                        rt.user_id,
+                        rt.account,
+                        COALESCE(rt.test_score, 0) as max_test_score,
+                        rt.created_time
+                    FROM ranked_tasks rt
+                    WHERE rt.rank_within_user = 1
+                )
+                SELECT 
+                    global_rank,
+                    max_test_score,
+                    created_time
+                FROM ranked_all
+                WHERE user_id = %s
+                """
+                
+                cursor.execute(query, (user_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    return {
+                        'rank': result['global_rank'],
+                        'test_score': float(result['max_test_score']),
+                        'created_time': result['created_time'].strftime('%Y-%m-%d %H:%M:%S') if result['created_time'] else None
+                    }
+                return None
+        except Exception as e:
+            print(f"获取用户测试分数排名失败: {e}")
+            raise e

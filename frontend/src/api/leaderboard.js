@@ -78,4 +78,31 @@ export const getCompetitionList = async () => {
   return response.data
 }
 
+/**
+ * 获取当前用户在总分排行榜中的排名
+ * @returns {Promise} - 用户总分排名
+ */
+export const getUserRankTotal = async () => {
+  const response = await api.get('/leaderboard/user/rank/total')
+  return response.data
+}
+
+/**
+ * 获取当前用户在训练成本排行榜中的排名
+ * @returns {Promise} - 用户成本排名
+ */
+export const getUserRankCost = async () => {
+  const response = await api.get('/leaderboard/user/rank/cost')
+  return response.data
+}
+
+/**
+ * 获取当前用户在测试分数排行榜中的排名
+ * @returns {Promise} - 用户测试分数排名
+ */
+export const getUserRankTest = async () => {
+  const response = await api.get('/leaderboard/user/rank/test')
+  return response.data
+}
+
 export default api

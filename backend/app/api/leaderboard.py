@@ -122,3 +122,75 @@ def get_user_best_score(current_user_id):
         
     except Exception as e:
         return jsonify({'error': f'获取用户最佳成绩失败: {str(e)}'}), 500
+
+@leaderboard_bp.route('/user/rank/total', methods=['GET'])
+@token_required
+def get_user_rank_total(current_user_id):
+    """
+    获取当前用户在总分排行榜中的排名
+    权限：需要登录
+    """
+    try:
+        rank_data = TrainingTask.get_user_rank_in_total_score(current_user_id)
+        
+        if not rank_data:
+            return jsonify({
+                'message': '用户暂无排名数据',
+                'data': None
+            }), 200
+        
+        return jsonify({
+            'message': '获取用户总分排名成功',
+            'data': rank_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'获取用户总分排名失败: {str(e)}'}), 500
+
+@leaderboard_bp.route('/user/rank/cost', methods=['GET'])
+@token_required
+def get_user_rank_cost(current_user_id):
+    """
+    获取当前用户在训练成本排行榜中的排名
+    权限：需要登录
+    """
+    try:
+        rank_data = TrainingTask.get_user_rank_in_cost(current_user_id)
+        
+        if not rank_data:
+            return jsonify({
+                'message': '用户暂无排名数据',
+                'data': None
+            }), 200
+        
+        return jsonify({
+            'message': '获取用户成本排名成功',
+            'data': rank_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'获取用户成本排名失败: {str(e)}'}), 500
+
+@leaderboard_bp.route('/user/rank/test', methods=['GET'])
+@token_required
+def get_user_rank_test(current_user_id):
+    """
+    获取当前用户在测试分数排行榜中的排名
+    权限：需要登录
+    """
+    try:
+        rank_data = TrainingTask.get_user_rank_in_test_score(current_user_id)
+        
+        if not rank_data:
+            return jsonify({
+                'message': '用户暂无排名数据',
+                'data': None
+            }), 200
+        
+        return jsonify({
+            'message': '获取用户测试分数排名成功',
+            'data': rank_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'获取用户测试分数排名失败: {str(e)}'}), 500
