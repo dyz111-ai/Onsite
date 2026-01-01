@@ -1,5 +1,5 @@
 # 训练相关的 API 路由
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 import threading
 import os
 import csv
@@ -138,75 +138,6 @@ def delete_training_record(training_id):
         return jsonify({"error": str(e)}), 500
 
 
-@training_bp.route('/records/<int:training_id>/status', methods=['PUT'])
-def update_training_status(training_id):
-    """更新训练状态"""
-    try:
-        import random
-        from app.database import get_db_cursor
-        
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({'error': '请求数据为空'}), 400
-        
-        status = data.get('status')
-        test_score = data.get('test_score')
-        total_score = data.get('total_score')
-        
-        if not status:
-            return jsonify({'error': '状态不能为空'}), 400
-        
-        # 获取训练记录
-        record = TrainingTask.get_by_id(training_id)
-        if not record:
-            return jsonify({'error': '训练记录不存在'}), 404
-        
-        # 更新状态
-        record.status = status
-        
-        # 如果状态变为 Tested，自动计算分数
-        if status == 'Tested':
-            # 生成 0-1 之间的随机测试分数
-            if test_score is None:
-                test_score = round(random.uniform(0, 1), 4)
-            
-            # 获取渲染成本
-            with get_db_cursor(commit=False) as cursor:
-                cursor.execute(
-                    """
-                    SELECT COALESCE(SUM(r.render_cost), 0) as render_cost
-                    FROM training_render_relation trr
-                    LEFT JOIN render r ON trr.render_id = r.render_id
-                    WHERE trr.training_id = %s
-                    """,
-                    (training_id,)
-                )
-                result = cursor.fetchone()
-                render_cost = float(result['render_cost']) if result else 0.0
-            
-            # 计算总分：train_cost + test_score + render_cost
-            total_score = round(record.train_cost + test_score + render_cost, 4)
-            
-            record.test_score = float(test_score)
-            record.total_score = float(total_score)
-        else:
-            # 其他状态，如果提供了分数就更新
-            if test_score is not None:
-                record.test_score = float(test_score)
-            if total_score is not None:
-                record.total_score = float(total_score)
-        
-        record.update()
-        
-        return jsonify({
-            "message": "状态更新成功",
-            "data": record.to_dict()
-        }), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @training_bp.route('/monitor/<int:training_id>', methods=['GET'])
 def get_training_monitor(training_id):
     """获取训练监控数据"""
@@ -246,5 +177,30 @@ def get_training_logs(training_id):
             log_content = f.read()
         
         return jsonify({"data": log_content}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@training_bp.route('/download-image', methods=['GET'])
+def download_image():
+    """下载Docker镜像文件"""
+    try:
+        # 获取项目根目录
+        current_dir = os.path.dirname(__file__)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+        
+        # 构建镜像文件路径
+        image_path = os.path.join(project_root, 'cache', 'docker', 'Onsite-image.tar')
+        
+        if not os.path.exists(image_path):
+            return jsonify({"error": "镜像文件不存在"}), 404
+        
+        # 发送文件
+        return send_file(
+            image_path,
+            as_attachment=True,
+            download_name='Onsite-image.tar',
+            mimetype='application/x-tar'
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
