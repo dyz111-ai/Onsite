@@ -4,7 +4,17 @@
     
     <!-- 总分排行榜 -->
     <div class="leaderboard-section">
-      <h2>总分排行榜</h2>
+      <div class="section-header">
+        <h2>总分排行榜</h2>
+        <div class="user-rank">
+          <span v-if="userRank.totalScore" class="rank-info">
+            我的排名：第 {{ userRank.totalScore.rank }} 名
+            <span class="rank-score">（{{ userRank.totalScore.score }} 分）</span>
+          </span>
+          <span v-else-if="loading.userRank.totalScore" class="rank-loading">加载中...</span>
+          <span v-else class="rank-empty">暂无排名</span>
+        </div>
+      </div>
       <div class="leaderboard-table-container">
         <table class="leaderboard-table">
           <thead>
@@ -40,7 +50,17 @@
     
     <!-- 训练成本排行榜 -->
     <div class="leaderboard-section">
-      <h2>训练成本排行榜</h2>
+      <div class="section-header">
+        <h2>训练成本排行榜</h2>
+        <div class="user-rank">
+          <span v-if="userRank.cost" class="rank-info">
+            我的排名：第 {{ userRank.cost.rank }} 名
+            <span class="rank-score">（{{ userRank.cost.cost === '无穷大' ? '无穷大' : userRank.cost.cost }} 元）</span>
+          </span>
+          <span v-else-if="loading.userRank.cost" class="rank-loading">加载中...</span>
+          <span v-else class="rank-empty">暂无排名</span>
+        </div>
+      </div>
       <div class="leaderboard-table-container">
         <table class="leaderboard-table">
           <thead>
@@ -76,7 +96,17 @@
     
     <!-- 测试分数排行榜 -->
     <div class="leaderboard-section">
-      <h2>测试分数排行榜</h2>
+      <div class="section-header">
+        <h2>测试分数排行榜</h2>
+        <div class="user-rank">
+          <span v-if="userRank.testScore" class="rank-info">
+            我的排名：第 {{ userRank.testScore.rank }} 名
+            <span class="rank-score">（{{ userRank.testScore.test_score }} 分）</span>
+          </span>
+          <span v-else-if="loading.userRank.testScore" class="rank-loading">加载中...</span>
+          <span v-else class="rank-empty">暂无排名</span>
+        </div>
+      </div>
       <div class="leaderboard-table-container">
         <table class="leaderboard-table">
           <thead>
@@ -114,13 +144,18 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getLeaderboardData, getCostLeaderboardData, getTestScoreLeaderboardData } from '../api/leaderboard'
+import { getLeaderboardData, getCostLeaderboardData, getTestScoreLeaderboardData, getUserRankTotal, getUserRankCost, getUserRankTest } from '../api/leaderboard'
 
 // 状态管理
 const loading = ref({
   totalScore: false,
   cost: false,
-  testScore: false
+  testScore: false,
+  userRank: {
+    totalScore: false,
+    cost: false,
+    testScore: false
+  }
 })
 
 const error = ref({
@@ -133,6 +168,12 @@ const leaderboardData = ref({
   totalScore: [],
   cost: [],
   testScore: []
+})
+
+const userRank = ref({
+  totalScore: null,
+  cost: null,
+  testScore: null
 })
 
 // 格式化日期
@@ -187,12 +228,57 @@ const fetchTestScoreLeaderboard = async () => {
   }
 }
 
+// 获取用户总分排名
+const fetchUserRankTotal = async () => {
+  loading.value.userRank.totalScore = true
+  try {
+    const response = await getUserRankTotal()
+    userRank.value.totalScore = response.data
+  } catch (err) {
+    console.error('获取用户总分排名失败:', err)
+    userRank.value.totalScore = null
+  } finally {
+    loading.value.userRank.totalScore = false
+  }
+}
+
+// 获取用户成本排名
+const fetchUserRankCost = async () => {
+  loading.value.userRank.cost = true
+  try {
+    const response = await getUserRankCost()
+    userRank.value.cost = response.data
+  } catch (err) {
+    console.error('获取用户成本排名失败:', err)
+    userRank.value.cost = null
+  } finally {
+    loading.value.userRank.cost = false
+  }
+}
+
+// 获取用户测试分数排名
+const fetchUserRankTest = async () => {
+  loading.value.userRank.testScore = true
+  try {
+    const response = await getUserRankTest()
+    userRank.value.testScore = response.data
+  } catch (err) {
+    console.error('获取用户测试分数排名失败:', err)
+    userRank.value.testScore = null
+  } finally {
+    loading.value.userRank.testScore = false
+  }
+}
+
 // 获取所有排行榜数据
 const fetchAllLeaderboardData = async () => {
   await Promise.all([
     fetchTotalScoreLeaderboard(),
     fetchCostLeaderboard(),
-    fetchTestScoreLeaderboard()
+    fetchTestScoreLeaderboard(),
+    fetchUserRankTotal(),
+    fetchUserRankCost(),
+    fetchUserRankTest()
   ])
 }
 
@@ -229,6 +315,45 @@ h1 {
   font-size: 20px;
   border-bottom: 2px solid #f0f0f0;
   padding-bottom: 10px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.user-rank {
+  font-size: 14px;
+  color: #666;
+}
+
+.rank-info {
+  color: #667eea;
+  font-weight: 500;
+}
+
+.rank-score {
+  color: #e74c3c;
+  font-weight: 600;
+  margin-left: 5px;
+}
+
+.rank-loading {
+  color: #999;
+  font-style: italic;
+}
+
+.rank-empty {
+  color: #999;
+  font-style: italic;
 }
 
 .leaderboard-table-container {

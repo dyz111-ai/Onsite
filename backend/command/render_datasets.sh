@@ -35,7 +35,7 @@ LOCAL_VIDEO_PATH="$LOCAL_CACHE_DIR/video/$RENDER_ID.mp4"
 # Server information
 SERVER_USER="root"
 SERVER_HOST="connect.cqa1.seetacloud.com"
-SERVER_PORT="19567"
+SERVER_PORT="44939"
 REMOTE_CACHE_DIR="/root/autodl-tmp/cache/$TASK"
 
 # Check if local files exist
@@ -79,8 +79,6 @@ fi
 
 echo "Render task started successfully with ID: $RENDER_ID"
 
-
-
 # generate video
 echo "Generating video..."
 ssh -p $SERVER_PORT $SERVER_USER@$SERVER_HOST "/root/autodl-tmp/carla_data_collect/scripts/generate_video.sh $TASK $RENDER_ID"
@@ -88,7 +86,8 @@ ssh -p $SERVER_PORT $SERVER_USER@$SERVER_HOST "/root/autodl-tmp/carla_data_colle
 # transmit video to local
 echo "Transmitting video to local..."
 REMOTE_VIDEO_FILE="/root/autodl-tmp/cache/$TASK/video/${RENDER_ID}.mp4"
-LOCAL_VIDEO_PATH="../frontend/cache/competition/video/"
+LOCAL_VIDEO_PATH="../frontend/cache/$TASK/video/"
+mkdir -p $LOCAL_VIDEO_PATH
 scp -P $SERVER_PORT $SERVER_USER@$SERVER_HOST:$REMOTE_VIDEO_FILE $LOCAL_VIDEO_PATH
 
 exit 0

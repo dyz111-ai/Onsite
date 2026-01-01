@@ -1,23 +1,27 @@
 <template>
   <div id="app">
-    <!-- 只在非登录页和非管理员页显示侧边栏 -->
-    <nav v-if="!isLoginPage && !isAdminPage" class="sidebar">
+    <!-- 修改：允许管理员页面显示侧边栏 -->
+    <nav v-if="!isLoginPage" class="sidebar"> <!-- 移除了 !isAdminPage 条件 -->
       <div class="logo">Onsite测训一体</div>
       <ul class="nav-menu">
         <li>
           <router-link to="/competition" class="nav-item">赛题查看</router-link>
         </li>
-        <li>
+        <li v-if="!isAdmin">
           <router-link to="/task-submit" class="nav-item">场景提交</router-link>
         </li>
-        <li>
+        <li v-if="!isAdmin">
           <router-link to="/training" class="nav-item">训练提交</router-link>
         </li>
-        <li>
+        <li v-if="!isAdmin">
           <router-link to="/evaluation" class="nav-item">测试评估</router-link>
         </li>
         <li>
           <router-link to="/leaderboard" class="nav-item">排行榜</router-link>
+        </li>
+        <!-- 添加管理员页面链接 -->
+        <li v-if="isAdmin">
+          <router-link to="/admin" class="nav-item">管理员</router-link>
         </li>
       </ul>
       <div class="user-info">
@@ -25,7 +29,7 @@
         <button @click="handleLogout" class="logout-btn">退出登录</button>
       </div>
     </nav>
-    <main :class="(isLoginPage || isAdminPage) ? 'main-content-full' : 'main-content'">
+    <main :class="(isLoginPage) ? 'main-content-full' : 'main-content'">
       <router-view />
     </main>
   </div>
@@ -42,15 +46,22 @@ const router = useRouter()
 const isLoginPage = computed(() => route.path === '/login')
 const isAdminPage = computed(() => route.path === '/admin')
 const username = ref(getCurrentUser()?.username || getCurrentUser()?.account || '未登录')
+const isAdmin = ref(false) // 添加管理员权限判断
 
-// 监听路由变化，更新用户名
+// 监听路由变化，更新用户名和权限
 watch(() => route.path, () => {
   const user = getCurrentUser()
   username.value = user?.username || user?.account || '未登录'
+  // 根据用户角色判断是否为管理员
+  isAdmin.value = user?.role === 'admin' || false
 })
 
 const handleLogout = () => {
   logout()
+  // 如果当前是管理员页面，登出后跳转到登录页
+  if (isAdminPage.value) {
+    router.push('/login')
+  }
 }
 </script>
 
