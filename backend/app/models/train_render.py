@@ -22,19 +22,30 @@ class Render:
         }
     
     @staticmethod
-    def get_all_by_user(user_id):
+    def get_all_by_user(user_id, status_filter=None):
         """获取指定用户的所有渲染记录"""
         try:
             with get_db_cursor(commit=False) as cursor:
-                cursor.execute(
-                    """
-                    SELECT render_id, user_id, name, status, created_time, render_cost
-                    FROM render
-                    WHERE user_id = %s
-                    ORDER BY created_time DESC
-                    """,
-                    (user_id,)
-                )
+                if status_filter:
+                    cursor.execute(
+                        """
+                        SELECT render_id, user_id, name, status, created_time, render_cost
+                        FROM render
+                        WHERE user_id = %s AND status = %s
+                        ORDER BY created_time DESC
+                        """,
+                        (user_id, status_filter)
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT render_id, user_id, name, status, created_time, render_cost
+                        FROM render
+                        WHERE user_id = %s
+                        ORDER BY created_time DESC
+                        """,
+                        (user_id,)
+                    )
                 results = cursor.fetchall()
                 
                 return [Render(

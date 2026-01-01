@@ -28,8 +28,13 @@ def get_render_records():
         
         user_id = payload['user_id']
         
+        # 获取状态过滤参数，默认为 None（返回所有）
+        # 如果请求参数中有 for_training=true，则只返回 completed 状态
+        for_training = request.args.get('for_training', 'false').lower() == 'true'
+        status_filter = 'Completed' if for_training else None
+        
         # 获取当前用户的渲染记录
-        records = Render.get_all_by_user(user_id)
+        records = Render.get_all_by_user(user_id, status_filter)
         
         return jsonify({
             "data": [record.to_dict() for record in records]

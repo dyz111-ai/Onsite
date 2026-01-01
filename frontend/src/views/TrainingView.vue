@@ -181,6 +181,7 @@ const currentTrainingInfoId = ref(null)
 const createDialogData = ref({
   show: false,
   loading: false,
+  creating: false,
   renders: [],
   selectedIds: []
 })
@@ -347,7 +348,7 @@ const showCreateDialog = async () => {
   
   try {
     const token = localStorage.getItem('token')
-    const response = await axios.get('/api/render/records', {
+    const response = await axios.get('/api/render/records?for_training=true', {
       headers: { Authorization: `Bearer ${token}` }
     })
     createDialogData.value.renders = response.data.data || []
@@ -362,6 +363,7 @@ const showCreateDialog = async () => {
 const closeDialog = () => {
   createDialogData.value.show = false
   createDialogData.value.selectedIds = []
+  createDialogData.value.creating = false
 }
 
 const downloadImage = async () => {
@@ -443,6 +445,8 @@ const downloadImage = async () => {
 const createTraining = async (selectedIds) => {
   if (selectedIds.length === 0) return
   
+  createDialogData.value.creating = true
+  
   try {
     const token = localStorage.getItem('token')
     const response = await axios.post('/api/training/records', {}, {
@@ -476,6 +480,8 @@ const createTraining = async (selectedIds) => {
   } catch (error) {
     message.value = '创建失败：' + (error.response?.data?.error || error.message)
     messageType.value = 'error'
+  } finally {
+    createDialogData.value.creating = false
   }
 }
 

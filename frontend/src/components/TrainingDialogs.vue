@@ -30,9 +30,10 @@
         </div>
       </div>
       <div class="dialog-footer">
-        <button @click="$emit('close-create')" class="cancel-btn">取消</button>
-        <button @click="$emit('confirm-create', createDialog.selectedIds)" class="confirm-btn" :disabled="createDialog.selectedIds.length === 0">
-          确定 (已选 {{ createDialog.selectedIds.length }})
+        <button @click="$emit('close-create')" class="cancel-btn" :disabled="createDialog.creating">取消</button>
+        <button @click="$emit('confirm-create', createDialog.selectedIds)" class="confirm-btn" :disabled="createDialog.selectedIds.length === 0 || createDialog.creating">
+          <span v-if="createDialog.creating">创建中...</span>
+          <span v-else>确定 (已选 {{ createDialog.selectedIds.length }})</span>
         </button>
       </div>
     </div>
@@ -49,18 +50,63 @@
         <div v-if="monitorDialog.loading" class="loading">加载中...</div>
         <div v-else-if="monitorDialog.error" class="error-message">{{ monitorDialog.error }}</div>
         <div v-else-if="monitorDialog.data.length === 0" class="no-data">暂无监控数据</div>
-        <div v-else class="charts-container">
-          <div class="chart-item">
-            <h4>CPU 使用率 (秒)</h4>
-            <canvas ref="cpuChart"></canvas>
+        <div v-else>
+          <!-- 导航栏 -->
+          <div class="monitor-nav">
+            <button 
+              :class="['nav-btn', { active: monitorView === 'charts' }]" 
+              @click="monitorView = 'charts'"
+            >
+              图表变化
+            </button>
+            <button 
+              :class="['nav-btn', { active: monitorView === 'data' }]" 
+              @click="monitorView = 'data'"
+            >
+              监控数值
+            </button>
           </div>
-          <div class="chart-item">
-            <h4>GPU 利用率 (%)</h4>
-            <canvas ref="gpuChart"></canvas>
+
+          <!-- 图表视图 -->
+          <div v-if="monitorView === 'charts'" class="charts-container">
+            <div class="chart-item">
+              <h4>CPU 使用增量 (秒)</h4>
+              <canvas ref="cpuChart"></canvas>
+            </div>
+            <div class="chart-item">
+              <h4>GPU 利用率 (%)</h4>
+              <canvas ref="gpuChart"></canvas>
+            </div>
+            <div class="chart-item">
+              <h4>内存使用 (MB)</h4>
+              <canvas ref="memoryChart"></canvas>
+            </div>
           </div>
-          <div class="chart-item">
-            <h4>内存使用 (MB)</h4>
-            <canvas ref="memoryChart"></canvas>
+
+          <!-- 数据表格视图 -->
+          <div v-if="monitorView === 'data'" class="data-table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>时间戳</th>
+                  <th>训练时长(秒)</th>
+                  <th>CPU使用(秒)</th>
+                  <th>GPU利用率(%)</th>
+                  <th>GPU显存(MB)</th>
+                  <th>系统内存(MB)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, index) in monitorDialog.data" :key="index">
+                  <td>{{ row.timestamp }}</td>
+                  <td>{{ parseFloat(row.training_time_seconds).toFixed(2) }}</td>
+                  <td>{{ parseFloat(row.cpu_usage_total_seconds).toFixed(2) }}</td>
+                  <td>{{ parseFloat(row['gpu_utilization_total(%)']).toFixed(2) }}</td>
+                  <td>{{ parseFloat(row.gpu_memory_total_mb).toFixed(2) }}</td>
+                  <td>{{ parseFloat(row.memory_usage_total_mb).toFixed(2) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -140,6 +186,7 @@ const props = defineProps({
 
 defineEmits(['close-create', 'confirm-create', 'close-monitor', 'close-log', 'download-log', 'close-dataset'])
 
+const monitorView = ref('charts') // 'charts' 或 'data'
 const cpuChart = ref(null)
 const gpuChart = ref(null)
 const memoryChart = ref(null)
@@ -151,18 +198,38 @@ let memoryChartInstance = null
 const drawMonitorCharts = () => {
   if (props.monitorDialog.data.length === 0) return
   
-  const labels = props.monitorDialog.data.map(d => d.timestamp)
+  // 处理标签：只显示时分秒，每5个显示一次
+  const labels = props.monitorDialog.data.map((d, index) => {
+    if (index % 5 === 0) {
+      // 提取时分秒部分 (HH:MM:SS)
+      const timestamp = d.timestamp
+      if (timestamp && timestamp.includes(' ')) {
+        return timestamp.split(' ')[1] // 只取时间部分
+      }
+      return timestamp
+    }
+    return '' // 其他位置不显示标签
+  })
   
   if (cpuChart.value) {
     if (cpuChartInstance) cpuChartInstance.destroy()
-    const cpuData = props.monitorDialog.data.map(d => parseFloat(d.cpu_usage_total_seconds))
+    
+    // 计算CPU使用增量（当前时间点 - 上一时间点）
+    const cpuData = props.monitorDialog.data.map((d, index) => {
+      if (index === 0) {
+        return 0 // 第一个数据点没有上一个时间点，设为0
+      }
+      const current = parseFloat(d.cpu_usage_total_seconds)
+      const previous = parseFloat(props.monitorDialog.data[index - 1].cpu_usage_total_seconds)
+      return Math.max(0, current - previous) // 确保不为负数
+    })
     
     cpuChartInstance = new Chart(cpuChart.value, {
       type: 'line',
       data: {
         labels: labels,
         datasets: [{
-          label: 'CPU 使用 (秒)',
+          label: 'CPU 使用增量 (秒)',
           data: cpuData,
           borderColor: 'rgb(75, 192, 192)',
           backgroundColor: 'rgba(75, 192, 192, 0.2)',
@@ -172,7 +239,15 @@ const drawMonitorCharts = () => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: true } }
+        plugins: { legend: { display: true } },
+        scales: {
+          x: {
+            ticks: {
+              maxRotation: 45,
+              minRotation: 45
+            }
+          }
+        }
       }
     })
   }
@@ -197,7 +272,15 @@ const drawMonitorCharts = () => {
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { display: true } },
-        scales: { y: { beginAtZero: true, max: 100 } }
+        scales: { 
+          x: {
+            ticks: {
+              maxRotation: 45,
+              minRotation: 45
+            }
+          },
+          y: { beginAtZero: true, max: 100 } 
+        }
       }
     })
   }
@@ -231,7 +314,15 @@ const drawMonitorCharts = () => {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: true } }
+        plugins: { legend: { display: true } },
+        scales: {
+          x: {
+            ticks: {
+              maxRotation: 45,
+              minRotation: 45
+            }
+          }
+        }
       }
     })
   }
@@ -239,7 +330,7 @@ const drawMonitorCharts = () => {
 
 // 监听监控弹窗数据变化
 watch(() => props.monitorDialog.data, async (newData) => {
-  if (newData.length > 0 && props.monitorDialog.show) {
+  if (newData.length > 0 && props.monitorDialog.show && monitorView.value === 'charts') {
     await nextTick()
     await nextTick()
     setTimeout(() => {
@@ -257,6 +348,18 @@ watch(() => props.monitorDialog.show, (newVal) => {
     cpuChartInstance = null
     gpuChartInstance = null
     memoryChartInstance = null
+    monitorView.value = 'charts' // 重置为图表视图
+  }
+})
+
+// 监听视图切换
+watch(monitorView, async (newView) => {
+  if (newView === 'charts' && props.monitorDialog.data.length > 0) {
+    await nextTick()
+    await nextTick()
+    setTimeout(() => {
+      drawMonitorCharts()
+    }, 100)
   }
 })
 </script>
@@ -509,5 +612,72 @@ watch(() => props.monitorDialog.show, (newVal) => {
 
 .dataset-field:last-child {
   margin-bottom: 0;
+}
+
+.monitor-nav {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #eee;
+}
+
+.nav-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  background: none;
+  color: #666;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+
+.nav-btn:hover {
+  color: #333;
+}
+
+.nav-btn.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  font-weight: 600;
+}
+
+.data-table-container {
+  overflow-x: auto;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table thead {
+  position: sticky;
+  top: 0;
+  background: #f5f5f5;
+  z-index: 1;
+}
+
+.data-table th {
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #ddd;
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+
+.data-table tbody tr:hover {
+  background: #f9f9f9;
 }
 </style>

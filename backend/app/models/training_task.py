@@ -122,17 +122,22 @@ class TrainingTask:
             with get_db_cursor(commit=False) as cursor:
                 cursor.execute(
                     """
-                    SELECT training_id, user_id, created_time, status, 
-                           train_cost, test_score, total_score, server_port, end_time
-                    FROM training_task
-                    WHERE training_id = %s
+                    SELECT 
+                        t.training_id, t.user_id, t.created_time, t.status, 
+                        t.train_cost, t.test_score, t.total_score, t.server_port, t.end_time,
+                        COUNT(trr.render_id) as dataset_count
+                    FROM training_task t
+                    LEFT JOIN training_render_relation trr ON t.training_id = trr.training_id
+                    WHERE t.training_id = %s
+                    GROUP BY t.training_id, t.user_id, t.created_time, t.status, 
+                             t.train_cost, t.test_score, t.total_score, t.server_port, t.end_time
                     """,
                     (training_id,)
                 )
                 row = cursor.fetchone()
                 
                 if row:
-                    return TrainingTask(
+                    record = TrainingTask(
                         training_id=row['training_id'],
                         user_id=row['user_id'],
                         created_time=row['created_time'],
@@ -143,6 +148,8 @@ class TrainingTask:
                         server_port=row.get('server_port'),
                         end_time=row.get('end_time')
                     )
+                    record.dataset_count = int(row['dataset_count']) if row.get('dataset_count') else 0
+                    return record
                 return None
         except Exception as e:
             print(f"获取训练记录失败: {e}")
@@ -203,8 +210,9 @@ class TrainingTask:
         
         try:
             total_training_time = 0
-            total_cpu_usage = 0
+            total_cpu_time = 0
             total_gpu_utilization = 0
+            total_gpu_memory = 0
             total_memory_usage = 0
             row_count = 0
             
@@ -212,8 +220,9 @@ class TrainingTask:
                 reader = csv.DictReader(f)
                 for row in reader:
                     total_training_time = float(row['training_time_seconds'])
-                    total_cpu_usage += float(row['cpu_usage_total_seconds'])
+                    total_cpu_time += float(row['cpu_usage_total_seconds'])
                     total_gpu_utilization += float(row['gpu_utilization_total(%)'])
+                    total_gpu_memory += float(row['gpu_memory_total_mb'])
                     total_memory_usage += float(row['memory_usage_total_mb'])
                     row_count += 1
             
@@ -221,24 +230,85 @@ class TrainingTask:
                 return 0.0
             
             # 计算平均值
-            avg_cpu = total_cpu_usage / row_count
-            avg_gpu = total_gpu_utilization / row_count
-            avg_memory = total_memory_usage / row_count
+            avg_cpu_usage_per_sec = total_cpu_time / total_training_time if total_training_time > 0 else 0
+            avg_gpu_utilization = total_gpu_utilization / row_count  # 平均GPU利用率(%)
+            avg_gpu_memory = total_gpu_memory / row_count  # 平均GPU显存(MB)
+            avg_memory_usage = total_memory_usage / row_count  # 平均内存使用量(MB)
             
-            # 成本计算公式（可以根据实际情况调整权重）
-            # CPU: 每秒 0.0001 元
-            # GPU: 每百分比 0.001 元
-            # 内存: 每MB 0.00001 元
-            cpu_cost = avg_cpu * 0.0001
-            gpu_cost = avg_gpu * 0.001
-            memory_cost = avg_memory * 0.00001
+            # 训练时长（小时）
+            training_hours = total_training_time / 3600
             
-            total_cost = cpu_cost + gpu_cost + memory_cost
+            # 成本计算公式（全面且有逻辑）：
+            # 1. 基础时间成本：训练时长 * 基础费率
+            base_time_cost = training_hours * 0.5
+            
+            # 2. CPU成本：累计CPU使用时间反映计算复杂度
+            #    CPU时间越长，计算任务越复杂，成本越高
+            cpu_hours = total_cpu_time / 3600
+            cpu_cost = cpu_hours * 0.08
+            
+            # 3. GPU利用率成本：GPU使用强度成本
+            #    高利用率表示GPU被充分使用，应收取更高费用
+            gpu_util_cost = (avg_gpu_utilization / 100) * training_hours * 2.5
+            
+            # 4. GPU显存成本：显存资源占用成本
+            #    显存是稀缺资源，按占用大小和时长收费
+            gpu_mem_gb = avg_gpu_memory / 1024
+            gpu_mem_cost = gpu_mem_gb * training_hours * 0.8
+            
+            # 5. 系统内存成本：内存资源占用成本
+            #    内存占用也会消耗系统资源
+            memory_gb = avg_memory_usage / 1024
+            memory_cost = memory_gb * training_hours * 0.2
+            
+            # 总成本 = 所有资源成本之和
+            total_cost = base_time_cost + cpu_cost + gpu_util_cost + gpu_mem_cost + memory_cost
             
             return round(total_cost, 4)
         except Exception as e:
             print(f"计算成本失败: {e}")
             return 0.0
+            """从CSV文件计算训练成本"""
+            import csv
+            
+            try:
+                total_training_time = 0
+                total_gpu_utilization = 0
+                total_gpu_memory = 0
+                row_count = 0
+                
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        total_training_time = float(row['training_time_seconds'])
+                        total_gpu_utilization += float(row['gpu_utilization_total(%)'])
+                        total_gpu_memory += float(row['gpu_memory_total_mb'])
+                        row_count += 1
+                
+                if row_count == 0:
+                    return 0.0
+                
+                # 计算平均值
+                avg_gpu_utilization = total_gpu_utilization / row_count  # 平均GPU利用率(%)
+                avg_gpu_memory = total_gpu_memory / row_count  # 平均GPU显存(MB)
+                
+                # 训练时长（小时）
+                training_hours = total_training_time / 3600
+                
+                # 成本计算公式：
+                # 基础成本 = 训练时长(小时) * 0.5 元/小时
+                # GPU利用率加成 = 平均GPU利用率(%) * 0.01 元
+                # GPU显存加成 = 平均GPU显存(GB) * 0.1 元
+                base_cost = training_hours * 0.5
+                gpu_util_cost = (avg_gpu_utilization / 100) * training_hours * 2.0  # GPU利用率越高，成本越高
+                gpu_mem_cost = (avg_gpu_memory / 1024) * training_hours * 0.5  # 显存使用越多，成本越高
+                
+                total_cost = base_cost + gpu_util_cost + gpu_mem_cost
+                
+                return round(totl_cost, 4)
+            except Exception as e:
+                print(f"计算成本失败: {e}")
+                return 0.0
     
     @staticmethod
     def update_cost_from_csv(training_id, csv_path):

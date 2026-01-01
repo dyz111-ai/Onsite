@@ -3,6 +3,13 @@
     <h2>测试评估</h2>
     
     <div class="filter-group">
+      <input 
+        v-model="searchId" 
+        type="text" 
+        placeholder="搜索训练ID" 
+        class="search-input"
+      />
+      
       <select v-model="filterStatus" class="filter-select">
         <option value="">全部状态</option>
         <option value="Training">训练中</option>
@@ -16,6 +23,14 @@
         <option value="today">今天</option>
         <option value="week">最近7天</option>
         <option value="month">最近30天</option>
+      </select>
+      
+      <select v-model="sortBy" class="filter-select">
+        <option value="">默认排序</option>
+        <option value="render_cost">渲染成本</option>
+        <option value="train_cost">训练成本</option>
+        <option value="test_score">测试分数</option>
+        <option value="total_score">总分</option>
       </select>
     </div>
     
@@ -96,7 +111,7 @@
         <div class="dialog-footer">
           <button @click="closeTestDialog" class="cancel-btn">取消</button>
           <button @click="confirmTest" :disabled="testing" class="confirm-btn">
-            {{ testing ? '测试中...' : '确定' }}
+            {{ testing ? '加载中...' : '确定' }}
           </button>
         </div>
       </div>
@@ -122,27 +137,27 @@
               <h4>总体评估指标</h4>
               <div class="metrics-grid">
                 <div class="metric-card" v-if="parsedResults.summary.NDS !== undefined">
-                  <div class="metric-label">NDS</div>
+                  <div class="metric-label">NDS (驾驶检测分数)</div>
                   <div class="metric-value">{{ parsedResults.summary.NDS.toFixed(4) }}</div>
                 </div>
                 <div class="metric-card" v-if="parsedResults.summary.mAP !== undefined">
-                  <div class="metric-label">mAP</div>
+                  <div class="metric-label">mAP (平均精度)</div>
                   <div class="metric-value">{{ parsedResults.summary.mAP.toFixed(4) }}</div>
                 </div>
                 <div class="metric-card" v-if="parsedResults.summary.mATE !== undefined">
-                  <div class="metric-label">mATE</div>
+                  <div class="metric-label">mATE (平均平移误差)</div>
                   <div class="metric-value">{{ parsedResults.summary.mATE.toFixed(4) }}</div>
                 </div>
                 <div class="metric-card" v-if="parsedResults.summary.mASE !== undefined">
-                  <div class="metric-label">mASE</div>
+                  <div class="metric-label">mASE (平均尺度误差)</div>
                   <div class="metric-value">{{ parsedResults.summary.mASE.toFixed(4) }}</div>
                 </div>
                 <div class="metric-card" v-if="parsedResults.summary.mAOE !== undefined">
-                  <div class="metric-label">mAOE</div>
+                  <div class="metric-label">mAOE (平均方向误差)</div>
                   <div class="metric-value">{{ parsedResults.summary.mAOE.toFixed(4) }}</div>
                 </div>
                 <div class="metric-card" v-if="parsedResults.summary.mAVE !== undefined">
-                  <div class="metric-label">mAVE</div>
+                  <div class="metric-label">mAVE (平均速度误差)</div>
                   <div class="metric-value">{{ parsedResults.summary.mAVE.toFixed(4) }}</div>
                 </div>
               </div>
@@ -156,11 +171,11 @@
                   <thead>
                     <tr>
                       <th>类别</th>
-                      <th>AP</th>
-                      <th>ATE</th>
-                      <th>ASE</th>
-                      <th>AOE</th>
-                      <th>AVE</th>
+                      <th>AP (精度)</th>
+                      <th>ATE (平移误差)</th>
+                      <th>ASE (尺度误差)</th>
+                      <th>AOE (方向误差)</th>
+                      <th>AVE (速度误差)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -211,7 +226,7 @@
                 
                 <div class="metrics-row">
                   <div class="metric-group">
-                    <div class="group-title">不同距离的AP</div>
+                    <div class="group-title">不同距离的AP (精度)</div>
                     <div class="metric-items">
                       <div v-for="(value, dist) in classMetric.AP_dist" :key="dist" class="metric-item">
                         <span class="item-label">{{ dist }}:</span>
@@ -224,7 +239,7 @@
                     <div class="group-title">误差指标</div>
                     <div class="metric-items">
                       <div v-for="(value, errType) in classMetric.errors" :key="errType" class="metric-item">
-                        <span class="item-label">{{ errType }}:</span>
+                        <span class="item-label">{{ getErrorTypeName(errType) }}:</span>
                         <span class="item-value">{{ value.toFixed(4) }}</span>
                       </div>
                     </div>
@@ -256,6 +271,8 @@ const trainingRecords = ref([])
 const loading = ref(true)
 const filterStatus = ref('')
 const filterTime = ref('')
+const searchId = ref('')
+const sortBy = ref('')
 
 const showTestDialog = ref(false)
 const showResultDialog = ref(false)
@@ -289,6 +306,14 @@ const getStatusClass = (status) => {
 const filteredRecords = computed(() => {
   let records = [...trainingRecords.value]
   
+  // 按ID搜索
+  if (searchId.value) {
+    const searchTerm = searchId.value.trim()
+    records = records.filter(r => 
+      String(r.training_id).includes(searchTerm)
+    )
+  }
+  
   // 按状态筛选
   if (filterStatus.value) {
     records = records.filter(r => r.status === filterStatus.value)
@@ -313,6 +338,24 @@ const filteredRecords = computed(() => {
           return diffDays <= 30
         default:
           return true
+      }
+    })
+  }
+  
+  // 排序
+  if (sortBy.value) {
+    records.sort((a, b) => {
+      switch (sortBy.value) {
+        case 'render_cost':
+          return (a.render_cost || 0) - (b.render_cost || 0) // 成本：低到高
+        case 'train_cost':
+          return (a.train_cost || 0) - (b.train_cost || 0) // 成本：低到高
+        case 'test_score':
+          return (b.test_score || 0) - (a.test_score || 0) // 分数：高到低
+        case 'total_score':
+          return (b.total_score || 0) - (a.total_score || 0) // 分数：高到低
+        default:
+          return 0
       }
     })
   }
@@ -548,6 +591,16 @@ const closeResultDialog = () => {
   resultLogContent.value = ''
 }
 
+const getErrorTypeName = (errType) => {
+  const errorTypeMap = {
+    'trans_err': 'trans_err (平移误差)',
+    'scale_err': 'scale_err (尺度误差)',
+    'orient_err': 'orient_err (方向误差)',
+    'vel_err': 'vel_err (速度误差)'
+  }
+  return errorTypeMap[errType] || errType
+}
+
 const loadTrainingRecords = async () => {
   try {
     loading.value = true
@@ -589,6 +642,30 @@ h3 {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: white;
+  transition: border-color 0.3s;
+  min-width: 150px;
+}
+
+.search-input:hover {
+  border-color: #42b983;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #42b983;
+}
+
+.search-input::placeholder {
+  color: #999;
 }
 
 .filter-select {
