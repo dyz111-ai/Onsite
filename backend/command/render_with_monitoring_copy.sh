@@ -1,23 +1,17 @@
 #!/bin/bash
 
 # Get task ID (no spaces around = in shell variables)
-TASK=render
 RENDER_ID=$1
 
-# Validate task parameter
-if [ -z "$TASK" ]; then
-    echo "Error: No task type provided"
-    echo "Usage: $0 <task_type> <task_id>"
-    echo "Valid task types: competition, render"
-    exit 1
-fi
+# Local file paths
+LOCAL_DESTINATION_PATH="../cache/destination/$RENDER_ID.json"
+LOCAL_XOSC_PATH="../cache/OpenSCENARIO/$RENDER_ID.xosc"
 
-# Validate task type is either "competition" or "render"
-if [[ "$TASK" != "competition" && "$TASK" != "render" ]]; then
-    echo "Error: Invalid task type '$TASK'"
-    echo "Valid task types: competition, render"
-    exit 1
-fi
+# Server information
+SERVER_USER="root"
+SERVER_HOST="connect.cqa1.seetacloud.com"
+SERVER_PORT="19567"
+REMOTE_CACHE_DIR="/root/autodl-tmp/cache"
 
 # Validate task ID
 if [ -z "$RENDER_ID" ]; then
@@ -25,18 +19,6 @@ if [ -z "$RENDER_ID" ]; then
     echo "Usage: $0 <task_id>"
     exit 1
 fi
-
-# Local file paths
-LOCAL_CACHE_DIR="../frontend/cache/$TASK"
-LOCAL_DESTINATION_PATH="$LOCAL_CACHE_DIR/destination/$RENDER_ID.json"
-LOCAL_XOSC_PATH="$LOCAL_CACHE_DIR/OpenSCENARIO/$RENDER_ID.xosc"
-LOCAL_VIDEO_PATH="$LOCAL_CACHE_DIR/video/$RENDER_ID.mp4"
-
-# Server information
-SERVER_USER="root"
-SERVER_HOST="connect.cqa1.seetacloud.com"
-SERVER_PORT="19567"
-REMOTE_CACHE_DIR="/root/autodl-tmp/cache/$TASK"
 
 # Check if local files exist
 if [ ! -f "$LOCAL_DESTINATION_PATH" ]; then
@@ -78,17 +60,8 @@ if [ $? -ne 0 ]; then
 fi
 
 
+# ssh -p $SERVER_PORT $SERVER_USER@$SERVER_HOST "nohup bash -c 'cd /root/autodl-tmp/docker-monitor && bash ./monitor_render.sh 1 render_1' > /dev/null 2>&1 &"
+# nohup bash -c 'cd /root/autodl-tmp/docker-monitor && bash ./monitor_render.sh 1 render_1' > /dev/null 2>&1 &
+
 echo "Render task started successfully with ID: $RENDER_ID"
-
-# generate video
-echo "Generating video..."
-ssh -p $SERVER_PORT $SERVER_USER@$SERVER_HOST "/root/autodl-tmp/carla_data_collect/scripts/generate_video.sh $TASK $RENDER_ID"
-
-# transmit video to local
-echo "Transmitting video to local..."
-REMOTE_VIDEO_FILE="/root/autodl-tmp/cache/$TASK/video/${RENDER_ID}.mp4"
-LOCAL_VIDEO_PATH="../frontend/cache/$TASK/video/"
-mkdir -p $LOCAL_VIDEO_PATH
-scp -P $SERVER_PORT $SERVER_USER@$SERVER_HOST:$REMOTE_VIDEO_FILE $LOCAL_VIDEO_PATH
-
 exit 0

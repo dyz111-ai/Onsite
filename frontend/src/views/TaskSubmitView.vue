@@ -6,9 +6,6 @@
         <button @click="showTaskSubmitModal = true" class="submit-btn">
           提交新任务
         </button>
-        <button @click="refreshList" class="refresh-btn">
-          刷新列表
-        </button>
       </div>
     </div>
 
@@ -69,8 +66,8 @@
             </div>
             
             <div class="render-field">
-              <strong>更新时间：</strong>
-              <span class="render-time">{{ formatTime(render.updated_time) }}</span>
+              <strong>资源消耗：</strong>
+              <span class="render-time">{{ formatTime(render.render_cost) }}</span>
             </div>
             
             <div v-if="render.description" class="render-field">
@@ -93,11 +90,17 @@
             <button @click="previewVideo(render.render_id)" class="video-btn">
               预览视频
             </button>
-            <button @click="selectRender(render)" class="select-btn">
-              选择
-            </button>
             <button v-if="allowDelete" @click="deleteRender(render.render_id)" class="delete-btn">
               删除
+            </button>
+            <!-- New download button - only show for completed renders -->
+            <button 
+              v-if="render.status === 'Completed'" 
+              @click="downloadDataset(render.render_id)" 
+              :disabled="downloading[render.render_id]"
+              class="download-btn"
+            >
+              {{ downloading[render.render_id] ? '下载中...' : '下载' }}
             </button>
           </div>
         </div>
@@ -233,6 +236,24 @@ const detailError = ref('')
 
 // Track currently previewed video
 const currentVideoId = ref(null)
+
+// Track download states for each render ID
+const downloading = ref({})
+
+// Download dataset archive
+const downloadDataset = async (renderId) => {
+  // 构建前端文件路径 - 直接访问public目录下的文件
+  const downloadUrl = `/cache/render/dataset/${competition.id}.tar.gz`;
+  
+  // 创建一个临时的a标签用于下载
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = `${fileName}${fileExtension}`;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
 // 加载渲染列表
 const loadRenderRecords = async () => {
   loading.value = true
@@ -264,29 +285,6 @@ const loadRenderRecords = async () => {
 const refreshList = () => {
   loadRenderRecords()
   emit('refresh')
-}
-
-// 查看详情
-const viewDetails = async (renderId) => {
-  currentDetailId.value = renderId
-  detailData.value = {}
-  detailError.value = ''
-  showDetailDialog.value = true
-  detailLoading.value = true
-  
-  try {
-    const token = localStorage.getItem('token')
-    const response = await axios.get(`/api/render/records/${renderId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    
-    detailData.value = response.data.data || {}
-  } catch (error) {
-    console.error('加载详情失败:', error)
-    detailError.value = error.response?.data?.error || '加载详情失败'
-  } finally {
-    detailLoading.value = false
-  }
 }
 
 // Open video preview
@@ -351,6 +349,7 @@ const closeTaskSubmitModal = () => {
 const onTaskSubmitSuccess = () => {
   message.value = '任务提交成功！'
   messageType.value = 'success'
+  refreshList()
   // Optionally refresh the list or update UI
   setTimeout(() => {
     closeTaskSubmitModal()
@@ -1006,5 +1005,31 @@ onMounted(() => {
 
 .video-btn:hover {
   background: #2980b9;
+}
+
+.download-btn {
+  background: #3f51b5;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.3s;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.download-btn:hover:not([disabled]) {
+  background: #303f9f;
+  transform: translateY(-1px);
+}
+
+.download-btn:disabled {
+  background: #b3c1dc;
+  cursor: not-allowed;
+  transform: none;
 }
 </style>

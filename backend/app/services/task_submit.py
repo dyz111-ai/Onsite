@@ -28,7 +28,7 @@ class TaskSubmitService:
             
             # FIX: Use proper path resolution based on current file location
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            script_path = os.path.join(base_dir, "command", "render_datasets.sh")
+            script_path = os.path.join(base_dir, "command", "render_with_monitoring.sh")
             app = current_app._get_current_object()
             
             # Execute render_dataset.sh script in a new thread without waiting
@@ -37,7 +37,7 @@ class TaskSubmitService:
                     try:
                         # Run the script and capture results
                         result = subprocess.run(
-                            [script_path, task_type, str(render_id)],
+                            [script_path, str(render_id)],
                             capture_output=True,
                             text=True
                         )

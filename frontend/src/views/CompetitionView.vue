@@ -59,9 +59,27 @@
               </span>
             </td>
             <td>
-              <button class="preview-btn" @click="previewVideo(comp)">预览</button>
-              <button class="download-btn" @click="downloadFile(comp, 'OpenSCENARIO')">下载OpenSCENARIO</button>
-              <button class="download-btn" @click="downloadFile(comp, 'destination')">下载Destination</button>
+              <button 
+                class="preview-btn" 
+                @click="previewVideo(comp)" 
+                :disabled="selectedListType === 'C'"
+              >
+                预览
+              </button>
+              <button 
+                class="download-btn" 
+                @click="downloadFile(comp, 'OpenSCENARIO')" 
+                :disabled="selectedListType === 'C'"
+              >
+                下载OpenSCENARIO
+              </button>
+              <button 
+                class="download-btn" 
+                @click="downloadFile(comp, 'destination')" 
+                :disabled="selectedListType === 'C'"
+              >
+                下载Destination
+              </button>
             </td>
           </tr>
         </tbody>
@@ -655,5 +673,37 @@ select, input {
   0% { opacity: 1; }
   70% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* Add to existing button styles */
+.preview-btn:disabled, 
+.download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: auto; /* Ensures the disabled state is properly recognized */
+  background-color: #e0e0e0 !important;
+  color: #9e9e9e !important;
+}
+
+/* Optional: Add tooltip for disabled buttons */
+.preview-btn:disabled:hover,
+.download-btn:disabled:hover {
+  position: relative;
+}
+
+.preview-btn:disabled:hover::after,
+.download-btn:disabled:hover::after {
+  content: "C卷不支持此操作";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  margin-bottom: 4px;
 }
 </style>
