@@ -317,17 +317,17 @@ watch(() => props.monitorDialog.show, (newVal) => {
 
 .download-btn {
   padding: 0.5rem 1rem;
-  background: #3498db;
+  background: #007bff;
   color: white;
   border: none;
   border-radius: 4px;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: opacity 0.3s;
 }
 
 .download-btn:hover {
-  background: #2980b9;
+  opacity: 0.85;
 }
 
 .close-btn {

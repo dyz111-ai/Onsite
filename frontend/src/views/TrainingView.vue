@@ -719,7 +719,7 @@ h2 {
   border: none;
   border-radius: 4px;
   font-size: 1rem;
-  background: #667eea 100%;
+  background: #007bff;
   color: white;
   cursor: pointer;
   transition: opacity 0.3s;
@@ -727,6 +727,10 @@ h2 {
   margin-left: 0.5rem;
   min-width: 140px;
   height: 45px;
+}
+
+.download-btn:hover {
+  opacity: 0.9;
 }
 
 .download-btn:hover {
