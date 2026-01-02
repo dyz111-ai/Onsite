@@ -100,24 +100,33 @@
                     查看日志
                   </button>
                 </div>
-                <button @click="deleteRecord(record.id)" class="action-btn delete-btn">
-                  删除
-                </button>
+                <div class="action-btn-group">
+                  <button @click="deleteRecord(record.id)" class="action-btn delete-btn">
+                    删除
+                  </button>
+                  <button 
+                    v-if="record.status === 'Training'" 
+                    @click="toggleLogs(record.training_id)" 
+                    class="action-btn toggle-btn"
+                  >
+                    {{ record.showLogs ? '隐藏日志' : '显示日志' }}
+                  </button>
+                </div>
               </div>
             </div>
             
             <!-- 实时训练日志（仅训练中显示） -->
-            <div v-if="record.logs && record.logs.length > 0 && record.status === 'Training'" class="log-section">
+            <div v-if="record.status === 'Training' && record.showLogs" class="log-section">
               <div class="log-header">
                 <h4>执行进度</h4>
-                <button @click="toggleLogs(record.training_id)" class="toggle-logs-btn">
-                  {{ record.showLogs ? '隐藏' : '显示' }}
-                </button>
               </div>
-              <div v-if="record.showLogs" class="log-container" :ref="el => setLogRef(record.training_id, el)">
+              <div v-if="record.logs && record.logs.length > 0" class="log-container" :ref="el => setLogRef(record.training_id, el)">
                 <div v-for="(log, index) in record.logs" :key="index" class="log-line">
                   {{ log }}
                 </div>
+              </div>
+              <div v-else class="no-logs">
+                <p>等待训练日志...</p>
               </div>
             </div>
           </div>
@@ -150,6 +159,28 @@
       @download-log="downloadLog"
       @close-dataset="closeDatasetDialog"
     />
+    
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteDialog" class="dialog-overlay" @click="closeDeleteDialog">
+      <div class="dialog-content" @click.stop>
+        <div class="dialog-header">
+          <h3>删除</h3>
+          <button @click="closeDeleteDialog" class="close-btn">&times;</button>
+        </div>
+        
+        <div class="dialog-body">
+          <p>确定要删除这条训练记录吗？</p>
+          <p class="warning-text">此操作将终止训练进程并删除所有相关数据，无法恢复。</p>
+        </div>
+        
+        <div class="dialog-footer">
+          <button @click="closeDeleteDialog" class="cancel-btn">取消</button>
+          <button @click="confirmDelete" :disabled="deleting" class="confirm-delete-btn">
+            {{ deleting ? '删除中...' : '确定删除' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -212,6 +243,11 @@ const datasetDialogData = ref({
   trainingId: null,
   datasets: []
 })
+
+// 删除确认弹窗
+const showDeleteDialog = ref(false)
+const deletingRecordId = ref(null)
+const deleting = ref(false)
 
 // 筛选后的记录
 const filteredRecords = computed(() => {
@@ -311,12 +347,37 @@ const loadTrainingRecords = async () => {
         showLogs: oldRecord ? oldRecord.showLogs : false
       }
     })
+    
+    // 为训练中的记录加载实时日志历史
+    for (const record of trainingRecords.value) {
+      if (record.status === 'Training') {
+        loadRealtimeLogs(record.training_id)
+      }
+    }
   } catch (error) {
     message.value = '加载训练记录失败：' + (error.response?.data?.error || error.message)
     messageType.value = 'error'
     trainingRecords.value = []
   } finally {
     loading.value = false
+  }
+}
+
+// 加载实时日志历史
+const loadRealtimeLogs = async (trainingId) => {
+  try {
+    const response = await axios.get(`/api/training/realtime-logs/${trainingId}`)
+    const logLines = response.data.data || []
+    
+    const record = trainingRecords.value.find(r => r.training_id === trainingId)
+    if (record) {
+      record.logs = logLines
+      if (record.showLogs) {
+        scrollToBottom(trainingId)
+      }
+    }
+  } catch (error) {
+    console.error('加载实时日志失败:', error)
   }
 }
 
@@ -440,19 +501,32 @@ const createTraining = async (selectedIds) => {
 }
 
 const deleteRecord = async (recordId) => {
-  if (!confirm('确定要删除这条训练记录吗？')) {
-    return
-  }
+  deletingRecordId.value = recordId
+  showDeleteDialog.value = true
+}
+
+const closeDeleteDialog = () => {
+  showDeleteDialog.value = false
+  deletingRecordId.value = null
+}
+
+const confirmDelete = async () => {
+  if (!deletingRecordId.value) return
+  
+  deleting.value = true
   
   try {
-    await deleteTrainingRecord(recordId)
+    await deleteTrainingRecord(deletingRecordId.value)
     await loadTrainingRecords()
     
     message.value = '训练记录已删除'
     messageType.value = 'success'
+    closeDeleteDialog()
   } catch (error) {
     message.value = '删除失败：' + (error.response?.data?.error || error.message)
     messageType.value = 'error'
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -986,6 +1060,11 @@ h4 {
   color: white;
 }
 
+.toggle-btn {
+  background: #6c757d;
+  color: white;
+}
+
 .log-section {
   margin-top: 1rem;
 }
@@ -999,22 +1078,6 @@ h4 {
 
 .log-header h4 {
   margin: 0;
-}
-
-.toggle-logs-btn {
-  padding: 0.4rem 1rem;
-  border: 1px solid #9c27b0;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.3s;
-  background: white;
-  color: #9c27b0;
-}
-
-.toggle-logs-btn:hover {
-  background: #9c27b0;
-  color: white;
 }
 
 .log-container {
@@ -1034,10 +1097,138 @@ h4 {
   word-break: break-all;
 }
 
+.no-logs {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+  font-style: italic;
+}
+
+.no-logs p {
+  margin: 0;
+}
+
 .no-data {
   text-align: center;
   padding: 3rem;
   color: #999;
   font-size: 1.1rem;
+}
+
+/* 删除确认弹窗样式 */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.dialog-content {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 450px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dialog-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.2rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  transition: color 0.3s;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.dialog-body {
+  padding: 2rem 1.5rem;
+}
+
+.dialog-body p {
+  margin: 0 0 1rem 0;
+  color: #555;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.dialog-body p:last-child {
+  margin-bottom: 0;
+}
+
+.warning-text {
+  color: #dc3545;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.cancel-btn,
+.confirm-delete-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s;
+}
+
+.cancel-btn {
+  background: #f5f5f5;
+  color: #555;
+}
+
+.cancel-btn:hover {
+  background: #e0e0e0;
+}
+
+.confirm-delete-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.confirm-delete-btn:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.confirm-delete-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
 }
 </style>

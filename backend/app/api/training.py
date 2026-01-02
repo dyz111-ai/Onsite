@@ -181,6 +181,26 @@ def get_training_logs(training_id):
         return jsonify({"error": str(e)}), 500
 
 
+@training_bp.route('/realtime-logs/<int:training_id>', methods=['GET'])
+def get_realtime_logs(training_id):
+    """获取实时训练日志"""
+    try:
+        # 构建实时日志文件路径
+        cache_dir = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cache', 'train')
+        realtime_log_path = os.path.join(cache_dir, f'train{training_id}', 'realtime.log')
+        
+        if not os.path.exists(realtime_log_path):
+            return jsonify({"data": []}), 200
+        
+        # 读取日志内容并按行分割
+        with open(realtime_log_path, 'r', encoding='utf-8', errors='ignore') as f:
+            log_lines = [line.strip() for line in f.readlines() if line.strip()]
+        
+        return jsonify({"data": log_lines}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @training_bp.route('/records/<int:training_id>/status', methods=['PUT'])
 def update_training_status(training_id):
     """更新训练状态"""
