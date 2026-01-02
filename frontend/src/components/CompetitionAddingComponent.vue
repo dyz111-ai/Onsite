@@ -54,6 +54,9 @@
         <div v-if="openScenarioFile" class="file-name">
           已选择: {{ openScenarioFile.name }}
         </div>
+        <div v-if="openScenarioError" class="error-message">
+          {{ openScenarioError }}
+        </div>
       </div>
     </div>
 
@@ -71,14 +74,25 @@
         <div v-if="targetPointsFile" class="file-name">
           已选择: {{ targetPointsFile.name }}
         </div>
+        <div v-if="targetPointsError" class="error-message">
+          {{ targetPointsError }}
+        </div>
       </div>
+    </div>
+
+    <div v-if="formError" class="form-error">
+      {{ formError }}
     </div>
 
     <div class="modal-actions">
       <button class="cancel-btn" @click="closeModal" :disabled="submitting">
         取消
       </button>
-      <button class="submit-btn" @click="submitCompetition" :disabled="submitting">
+      <button 
+        class="submit-btn" 
+        @click="submitCompetition" 
+        :disabled="submitting || !isFormValid"
+      >
         {{ submitting ? '提交中...' : '提交' }}
       </button>
     </div>
@@ -104,7 +118,20 @@ export default {
       loadingMinNumber: false,
       submitting: false,
       openScenarioFile: null,
-      targetPointsFile: null
+      targetPointsFile: null,
+      openScenarioError: '',
+      targetPointsError: '',
+      formError: ''
+    }
+  },
+  computed: {
+    isFormValid() {
+      return this.formData.type && 
+             this.formData.number && 
+             this.openScenarioFile && 
+             this.targetPointsFile && 
+             !this.openScenarioError && 
+             !this.targetPointsError;
     }
   },
   methods: {
@@ -146,12 +173,12 @@ export default {
     
     async submitCompetition() {
       // Enhanced validation
-      if (!this.formData.type || !this.formData.number || 
-          !this.openScenarioFile || !this.targetPointsFile) {
-        alert('请填写所有必填字段');
+      if (!this.isFormValid) {
+        this.formError = '请填写所有必填字段';
         return;
       }
       
+      this.formError = ''; // Clear any form errors
       this.submitting = true;
       
       try {
@@ -192,10 +219,10 @@ export default {
           } catch {
             errorMessage = await response.text() || errorMessage;
           }
-          alert(`提交失败: ${errorMessage}`);
+          this.formError = `提交失败: ${errorMessage}`;
         }
       } catch (error) {
-        alert(`请求失败: ${error.message}`);
+        this.formError = `请求失败: ${error.message}`;
       } finally {
         this.submitting = false;
       }
@@ -203,22 +230,146 @@ export default {
 
     handleOpenScenarioFileChange(event) {
       const file = event.target.files[0];
-      if (file && file.name.endsWith('.xosc')) {
-        this.openScenarioFile = file;
-      } else {
-        alert('请选择.xosc格式的文件');
-        event.target.value = ''; // Clear selection
+      this.openScenarioError = ''; // Clear previous error
+      
+      if (!file) return;
+      
+      if (!file.name.endsWith('.xosc')) {
+        this.openScenarioError = '请选择.xosc格式的文件';
+        event.target.value = '';
+        return;
       }
+      
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        const content = e.target.result;
+        
+        try {
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(content, 'text/xml');
+          
+          // Check for XML parsing errors
+          const parserError = xmlDoc.querySelector('parsererror');
+          if (parserError) {
+            this.openScenarioError = 'XML格式错误：' + parserError.textContent;
+            event.target.value = '';
+            return;
+          }
+          
+          // Check for required elements in OpenSCENARIO
+          const catalogLocations = xmlDoc.getElementsByTagName('CatalogLocations');
+          const roadNetwork = xmlDoc.getElementsByTagName('RoadNetwork');
+          const entities = xmlDoc.getElementsByTagName('Entities');
+          const scenarioObjects = xmlDoc.getElementsByTagName('ScenarioObject');
+          
+          if (catalogLocations.length === 0 || roadNetwork.length === 0 || entities.length === 0) {
+            this.openScenarioError = '文件格式错误：缺少必要的OpenSCENARIO结构';
+            event.target.value = '';
+            return;
+          }
+          
+          // Check for hero object
+          let hasHeroObject = false;
+          for (let obj of scenarioObjects) {
+            if (obj.getAttribute('name') === 'hero') {
+              hasHeroObject = true;
+              break;
+            }
+          }
+          
+          if (!hasHeroObject) {
+            this.openScenarioError = '文件格式错误：未找到 <ScenarioObject name="hero"> 元素';
+            event.target.value = '';
+            return;
+          }
+          
+          // If all validations pass, set the file
+          this.openScenarioFile = file;
+          console.log('OpenSCENARIO文件验证通过，已加载文件：', file.name);
+          
+        } catch (error) {
+          console.error('XML解析错误:', error);
+          this.openScenarioError = 'XML格式错误：无法解析文件内容';
+          event.target.value = '';
+        }
+      };
+      
+      reader.onerror = () => {
+        this.openScenarioError = '读取文件失败，请重试';
+        event.target.value = '';
+      };
+      
+      reader.readAsText(file);
     },
     
     handleTargetPointsFileChange(event) {
       const file = event.target.files[0];
-      if (file && file.name.endsWith('.json')) {
-        this.targetPointsFile = file;
-      } else {
-        alert('请选择.json格式的文件');
-        event.target.value = ''; // Clear selection
+      this.targetPointsError = ''; // Clear previous error
+      
+      if (!file) return;
+      
+      if (!file.name.endsWith('.json')) {
+        this.targetPointsError = '请选择.json格式的文件';
+        event.target.value = '';
+        return;
       }
+      
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const content = e.target.result;
+          const jsonData = JSON.parse(content);
+          
+          // Validate JSON structure - check if it's an object with x, y, z properties
+          if (typeof jsonData !== 'object' || jsonData === null || Array.isArray(jsonData)) {
+            this.targetPointsError = 'JSON文件必须包含一个对象';
+            event.target.value = '';
+            return;
+          }
+          
+          // Check if object has only x, y, z properties
+          const keys = Object.keys(jsonData);
+          if (keys.length !== 3) {
+            this.targetPointsError = '对象必须只包含x, y, z三个属性';
+            event.target.value = '';
+            return;
+          }
+          
+          // Check if all required properties exist
+          if (!keys.includes('x') || !keys.includes('y') || !keys.includes('z')) {
+            this.targetPointsError = '对象必须包含x, y, z三个属性';
+            event.target.value = '';
+            return;
+          }
+          
+          // Check if x, y, z are numbers
+          if (typeof jsonData.x !== 'number' || 
+              typeof jsonData.y !== 'number' || 
+              typeof jsonData.z !== 'number') {
+            this.targetPointsError = 'x, y, z必须是数字';
+            event.target.value = '';
+            return;
+          }
+          
+          // If all validations pass, set the file
+          this.targetPointsFile = file;
+          console.log('JSON文件验证通过，已加载文件：', file.name);
+          
+        } catch (error) {
+          console.error('JSON解析错误:', error);
+          this.targetPointsError = 'JSON格式错误：无法解析文件内容';
+          event.target.value = '';
+        }
+      };
+      
+      reader.onerror = () => {
+        this.targetPointsError = '读取文件失败，请重试';
+        event.target.value = '';
+      };
+      
+      reader.readAsText(file);
     }
   }
 }
@@ -296,8 +447,13 @@ select, input {
   border: none;
 }
 
-.submit-btn:hover {
+.submit-btn:hover:not(:disabled) {
   background-color: #0b7dda;
+}
+
+.submit-btn:disabled {
+  background-color: #bbdefb;
+  cursor: not-allowed;
 }
 
 .success-message {
@@ -320,6 +476,23 @@ select, input {
   margin-top: 0.5rem;
   font-size: 0.9rem;
   color: #4CAF50;
+}
+
+.error-message {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: #f44336; /* Red color for error messages */
+  font-weight: 500;
+}
+
+.form-error {
+  margin: 1rem 0;
+  padding: 0.8rem;
+  background-color: #ffebee;
+  color: #f44336;
+  border-radius: 4px;
+  font-weight: 500;
+  border-left: 4px solid #f44336;
 }
 
 @keyframes fadeOut {

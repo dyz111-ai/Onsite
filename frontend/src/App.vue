@@ -4,7 +4,7 @@
     <nav v-if="!isLoginPage" class="sidebar"> <!-- 移除了 !isAdminPage 条件 -->
       <div class="logo">Onsite测训一体</div>
       <ul class="nav-menu">
-        <li>
+        <li v-if="!isAdmin">
           <router-link to="/competition" class="nav-item">赛题查看</router-link>
         </li>
         <li v-if="!isAdmin">
@@ -21,7 +21,7 @@
         </li>
         <!-- 添加管理员页面链接 -->
         <li v-if="isAdmin">
-          <router-link to="/admin" class="nav-item">管理员</router-link>
+          <router-link to="/admin" class="nav-item">赛题管理</router-link>
         </li>
       </ul>
       <div class="user-info">
