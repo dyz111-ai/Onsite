@@ -297,6 +297,23 @@ def update_training_status(training_id):
 def download_image():
     """下载Docker镜像文件"""
     try:
+        # 从请求头或URL参数获取 token 并验证
+        token = None
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            try:
+                token = auth_header.split(' ')[1]
+            except IndexError:
+                pass
+        
+        if not token:
+            token = request.args.get('token')
+        
+        if token:
+            payload = decode_token(token)
+            if not payload:
+                return jsonify({"error": "Token 无效或已过期"}), 401
+        
         # 获取项目根目录
         current_dir = os.path.dirname(__file__)
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
