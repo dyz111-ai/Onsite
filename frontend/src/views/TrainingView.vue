@@ -653,7 +653,7 @@ const getStatusText = (status) => {
 onMounted(() => {
   loadTrainingRecords()
   
-  socket = io('http://localhost:8000')
+  socket = io('http://106.15.38.222')
 
   socket.on('connect', () => {
     console.log('WebSocket已连接')
