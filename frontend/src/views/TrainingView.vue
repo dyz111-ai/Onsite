@@ -427,32 +427,24 @@ const closeDialog = () => {
   createDialogData.value.creating = false
 }
 
-const downloadImage = async () => {
+const downloadImage = () => {
   try {
-    message.value = '正在准备下载镜像文件...'
+    message.value = '正在启动下载...'
     messageType.value = 'info'
     
     const token = localStorage.getItem('token')
-    const response = await axios.get('/api/training/download-image', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      responseType: 'blob'
-    })
-    
-    const blob = new Blob([response.data], { type: 'application/x-tar' })
-    const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url
+    link.href = `/api/training/download-image?token=${token}`
     link.download = 'Onsite-image.tar'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
     
-    message.value = '文件开始下载，请在浏览器中查看文件下载情况'
+    message.value = '文件已开始下载，请在浏览器中查看下载进度'
     messageType.value = 'success'
   } catch (error) {
     console.error('下载镜像失败:', error)
-    message.value = '下载镜像失败：' + (error.response?.data?.error || error.message)
+    message.value = '下载镜像失败：' + error.message
     messageType.value = 'error'
   }
 }
