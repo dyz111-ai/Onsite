@@ -4,13 +4,12 @@ from contextlib import contextmanager
 
 # 数据库连接配置
 DB_CONFIG = {
-    "host": "shuttle.proxy.rlwy.net",
-    "port": "36158",
+    "host": "pgm-uf6485lj073ogs846o.pg.rds.aliyuncs.com",
+    "port": "5432",
     "database": "railway",
     "user": "postgres",
-    "password": "gSUlaJNbsKWNcZUwRjQUUqjlxeuuAqkV"
+    "password": "Toosimple0531"
 }
-
 @contextmanager
 def get_db_connection():
     """获取数据库连接的上下文管理器"""
