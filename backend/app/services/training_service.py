@@ -12,6 +12,13 @@ class TrainingService:
     def run_training_script(script_path, training_id, socketio):
         """在后台线程中执行训练脚本并实时发送输出"""
         try:
+            # 创建实时日志文件路径
+            current_dir = os.path.dirname(__file__)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+            realtime_log_dir = os.path.join(project_root, 'cache', 'train', f'train{training_id}')
+            os.makedirs(realtime_log_dir, exist_ok=True)
+            realtime_log_path = os.path.join(realtime_log_dir, 'realtime.log')
+            
             # 根据操作系统选择执行方式
             if platform.system() == 'Windows':
                 process = subprocess.Popen(
@@ -40,32 +47,37 @@ class TrainingService:
             if process.stdin:
                 process.stdin.close()
 
-            # 实时读取输出
+            # 实时读取输出并保存到文件
             selected_port = None
-            while True:
-                line = process.stdout.readline()
-                if not line:
-                    break
-                    
-                try:
-                    decoded_line = line.decode('utf-8').strip()
-                except UnicodeDecodeError:
+            with open(realtime_log_path, 'a', encoding='utf-8') as log_file:
+                while True:
+                    line = process.stdout.readline()
+                    if not line:
+                        break
+                        
                     try:
-                        decoded_line = line.decode('gbk').strip()
+                        decoded_line = line.decode('utf-8').strip()
                     except UnicodeDecodeError:
-                        decoded_line = line.decode('utf-8', errors='ignore').strip()
-
-                if decoded_line:
-                    # 检测服务器端口信息
-                    if 'Using server port:' in decoded_line:
                         try:
-                            selected_port = int(decoded_line.split(':')[-1].strip())
-                            # 保存服务器端口到数据库
-                            TrainingService.update_server_port(training_id, selected_port)
-                        except:
-                            pass
-                    
-                    socketio.emit('training_log', {'message': decoded_line, 'training_id': training_id})
+                            decoded_line = line.decode('gbk').strip()
+                        except UnicodeDecodeError:
+                            decoded_line = line.decode('utf-8', errors='ignore').strip()
+
+                    if decoded_line:
+                        # 保存到文件
+                        log_file.write(decoded_line + '\n')
+                        log_file.flush()
+                        
+                        # 检测服务器端口信息
+                        if 'Using server port:' in decoded_line:
+                            try:
+                                selected_port = int(decoded_line.split(':')[-1].strip())
+                                # 保存服务器端口到数据库
+                                TrainingService.update_server_port(training_id, selected_port)
+                            except:
+                                pass
+                        
+                        socketio.emit('training_log', {'message': decoded_line, 'training_id': training_id})
 
             # 等待进程结束
             returncode = process.wait()

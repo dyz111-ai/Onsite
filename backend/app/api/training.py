@@ -181,6 +181,26 @@ def get_training_logs(training_id):
         return jsonify({"error": str(e)}), 500
 
 
+@training_bp.route('/realtime-logs/<int:training_id>', methods=['GET'])
+def get_realtime_logs(training_id):
+    """获取实时训练日志"""
+    try:
+        # 构建实时日志文件路径
+        cache_dir = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cache', 'train')
+        realtime_log_path = os.path.join(cache_dir, f'train{training_id}', 'realtime.log')
+        
+        if not os.path.exists(realtime_log_path):
+            return jsonify({"data": []}), 200
+        
+        # 读取日志内容并按行分割
+        with open(realtime_log_path, 'r', encoding='utf-8', errors='ignore') as f:
+            log_lines = [line.strip() for line in f.readlines() if line.strip()]
+        
+        return jsonify({"data": log_lines}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @training_bp.route('/records/<int:training_id>/status', methods=['PUT'])
 def update_training_status(training_id):
     """更新训练状态"""
@@ -195,6 +215,32 @@ def update_training_status(training_id):
         record = TrainingTask.get_by_id(training_id)
         if not record:
             return jsonify({"error": "训练记录不存在"}), 404
+        
+        # 如果要开始测试，先验证训练日志是否存在且包含必要指标
+        if status == 'Testing':
+            cache_dir = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'cache', 'train')
+            log_path = os.path.join(cache_dir, f'train{training_id}', 'train.log')
+            
+            if not os.path.exists(log_path):
+                return jsonify({"error": "未完成训练，无法开始测试"}), 400
+            
+            # 检查日志中是否包含必要的评估指标
+            try:
+                with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    log_content = f.read()
+                
+                import re
+                # 检查是否包含至少一个关键指标
+                has_metrics = any([
+                    re.search(r'NDS:\s*([\d.]+)', log_content),
+                    re.search(r'mAP:\s*([\d.]+)', log_content),
+                    re.search(r'Per-class results:', log_content)
+                ])
+                
+                if not has_metrics:
+                    return jsonify({"error": "未完成训练，无法开始测试"}), 400
+            except Exception as e:
+                return jsonify({"error": f"读取训练日志失败: {str(e)}"}), 500
         
         record.status = status
         

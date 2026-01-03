@@ -80,7 +80,7 @@
                   @click="startTest(record.training_id)" 
                   class="action-btn test-btn"
                 >
-                  开始测试
+                  生成测试
                 </button>
                 <button 
                   v-if="record.status === 'Tested'"
@@ -96,16 +96,16 @@
       </div>
     </div>
     
-    <!-- 开始测试确认弹窗 -->
+    <!-- 测试确认弹窗 -->
     <div v-if="showTestDialog" class="dialog-overlay" @click="closeTestDialog">
       <div class="dialog-content" @click.stop>
         <div class="dialog-header">
-          <h3>确认开始测试</h3>
+          <h3>确认</h3>
           <button @click="closeTestDialog" class="close-btn">&times;</button>
         </div>
         
         <div class="dialog-body">
-          <p>确定要开始测试训练ID {{ currentTestingId }} 吗？</p>
+          <p>确定要生成测试训练ID {{ currentTestingId }} 吗？</p>
         </div>
         
         <div class="dialog-footer">
@@ -255,6 +255,9 @@
         </div>
         
         <div class="dialog-footer">
+          <button @click="exportPDF" class="export-btn" :disabled="loadingResult || !parsedResults">
+            {{ exportingPDF ? '导出中...' : '导出PDF报告' }}
+          </button>
           <button @click="closeResultDialog" class="confirm-btn">关闭</button>
         </div>
       </div>
@@ -266,6 +269,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { getTrainingRecords } from '../api/trainingRecords'
 import api from '../api/auth'
+import jsPDF from 'jspdf'
 
 const trainingRecords = ref([])
 const loading = ref(true)
@@ -282,6 +286,7 @@ const loadingResult = ref(false)
 const resultLogContent = ref('')
 const testing = ref(false)
 const parsedResults = ref(null)
+const exportingPDF = ref(false)
 
 const getStatusText = (status) => {
   const statusMap = {
@@ -305,6 +310,9 @@ const getStatusClass = (status) => {
 
 const filteredRecords = computed(() => {
   let records = [...trainingRecords.value]
+  
+  // 过滤掉"训练中"状态的记录
+  records = records.filter(r => r.status !== 'Training')
   
   // 按ID搜索
   if (searchId.value) {
@@ -391,7 +399,7 @@ const confirmTest = async () => {
     
     closeTestDialog()
     
-    // 随机2-4秒后更新为 Tested
+   
     const delay = Math.floor(Math.random() * 2000) + 2000 // 2000-4000ms
     setTimeout(async () => {
       try {
@@ -411,8 +419,9 @@ const confirmTest = async () => {
     }, delay)
     
   } catch (error) {
-    console.error('开始测试失败:', error)
-    alert(error.response?.data?.error || '开始测试失败')
+    console.error('生成测试失败:', error)
+    const errorMsg = error.response?.data?.error || '生成测试失败'
+    alert(errorMsg)
   } finally {
     testing.value = false
   }
@@ -599,6 +608,145 @@ const getErrorTypeName = (errType) => {
     'vel_err': 'vel_err (速度误差)'
   }
   return errorTypeMap[errType] || errType
+}
+
+const exportPDF = async () => {
+  if (!parsedResults.value) return
+  
+  exportingPDF.value = true
+  
+  try {
+    const doc = new jsPDF()
+    let yPos = 20
+    
+    // 标题
+    doc.setFontSize(16)
+    doc.text(`Training ${currentResultId.value} - Evaluation Report`, 20, yPos)
+    yPos += 15
+    
+    // 总体评估指标
+    doc.setFontSize(12)
+    doc.text('Overall Evaluation Metrics', 20, yPos)
+    yPos += 8
+    
+    doc.setFontSize(10)
+    const summary = parsedResults.value.summary
+    if (summary.NDS !== undefined) {
+      doc.text(`NDS (Driving Detection Score): ${summary.NDS.toFixed(4)}`, 25, yPos)
+      yPos += 6
+    }
+    if (summary.mAP !== undefined) {
+      doc.text(`mAP (Mean Average Precision): ${summary.mAP.toFixed(4)}`, 25, yPos)
+      yPos += 6
+    }
+    if (summary.mATE !== undefined) {
+      doc.text(`mATE (Mean Translation Error): ${summary.mATE.toFixed(4)}`, 25, yPos)
+      yPos += 6
+    }
+    if (summary.mASE !== undefined) {
+      doc.text(`mASE (Mean Scale Error): ${summary.mASE.toFixed(4)}`, 25, yPos)
+      yPos += 6
+    }
+    if (summary.mAOE !== undefined) {
+      doc.text(`mAOE (Mean Orientation Error): ${summary.mAOE.toFixed(4)}`, 25, yPos)
+      yPos += 6
+    }
+    if (summary.mAVE !== undefined) {
+      doc.text(`mAVE (Mean Velocity Error): ${summary.mAVE.toFixed(4)}`, 25, yPos)
+      yPos += 10
+    }
+    
+    // 各类别检测结果
+    if (parsedResults.value.perClass.length > 0) {
+      if (yPos > 250) {
+        doc.addPage()
+        yPos = 20
+      }
+      
+      doc.setFontSize(12)
+      doc.text('Per-Class Detection Results', 20, yPos)
+      yPos += 8
+      
+      doc.setFontSize(9)
+      parsedResults.value.perClass.forEach(item => {
+        if (yPos > 270) {
+          doc.addPage()
+          yPos = 20
+        }
+        doc.text(`${item.class}: AP=${item.AP.toFixed(3)}, ATE=${item.ATE.toFixed(3)}, ASE=${item.ASE.toFixed(3)}, AOE=${item.AOE.toFixed(3)}, AVE=${item.AVE.toFixed(3)}`, 25, yPos)
+        yPos += 6
+      })
+      yPos += 5
+    }
+    
+    // 规划评估指标
+    if (parsedResults.value.planningMetrics.length > 0) {
+      if (yPos > 250) {
+        doc.addPage()
+        yPos = 20
+      }
+      
+      doc.setFontSize(12)
+      doc.text('Planning Evaluation Metrics', 20, yPos)
+      yPos += 8
+      
+      doc.setFontSize(9)
+      parsedResults.value.planningMetrics.forEach(metric => {
+        if (yPos > 270) {
+          doc.addPage()
+          yPos = 20
+        }
+        const values = metric.values.map(v => `${v.time}:${v.value.toFixed(4)}`).join(', ')
+        doc.text(`${metric.name}: ${values}`, 25, yPos)
+        yPos += 6
+      })
+      yPos += 5
+    }
+    
+    // 详细检测指标
+    if (parsedResults.value.detailedMetrics.length > 0) {
+      if (yPos > 230) {
+        doc.addPage()
+        yPos = 20
+      }
+      
+      doc.setFontSize(12)
+      doc.text('Detailed Detection Metrics', 20, yPos)
+      yPos += 8
+      
+      doc.setFontSize(8)
+      parsedResults.value.detailedMetrics.forEach(classMetric => {
+        if (yPos > 260) {
+          doc.addPage()
+          yPos = 20
+        }
+        
+        doc.setFontSize(9)
+        doc.text(`${classMetric.class}:`, 25, yPos)
+        yPos += 5
+        
+        doc.setFontSize(8)
+        // AP距离
+        const apDist = Object.entries(classMetric.AP_dist).map(([k, v]) => `${k}:${v.toFixed(4)}`).join(', ')
+        doc.text(`  AP_dist: ${apDist}`, 30, yPos)
+        yPos += 5
+        
+        // 误差指标
+        const errors = Object.entries(classMetric.errors).map(([k, v]) => `${k}:${v.toFixed(4)}`).join(', ')
+        doc.text(`  Errors: ${errors}`, 30, yPos)
+        yPos += 7
+      })
+    }
+    
+    // 保存PDF
+    doc.save(`training_${currentResultId.value}_report.pdf`)
+    
+  } catch (error) {
+    console.error('导出PDF失败:', error)
+    alert('导出PDF失败')
+  } finally {
+    exportingPDF.value = false
+  }
 }
 
 const loadTrainingRecords = async () => {
@@ -1109,7 +1257,8 @@ tbody tr:hover {
 }
 
 .cancel-btn,
-.confirm-btn {
+.confirm-btn,
+.export-btn {
   padding: 0.75rem 1.5rem;
   border: none;
   border-radius: 4px;
@@ -1137,6 +1286,20 @@ tbody tr:hover {
 }
 
 .confirm-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.export-btn {
+  background: #667eea;
+  color: white;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.export-btn:disabled {
   background: #ccc;
   cursor: not-allowed;
 }

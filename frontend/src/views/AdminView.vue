@@ -63,7 +63,14 @@
             <td>{{ comp.type }}</td>
             <td>{{ comp.number }}</td>
             <td>
-              <button class="view-btn" @click="viewCompetition(comp)">查看详情</button>
+              <!-- Video Preview Button -->
+              <button 
+                @click="previewVideo(comp.id)" 
+                class="video-btn"
+                :disabled="comp.status !== 'Published'"
+              >
+                预览视频
+              </button>
             </td>
           </tr>
         </tbody>
@@ -109,16 +116,34 @@
     <div v-if="showSuccess" class="success-message">
       赛题提交成功！
     </div>
+    
+    <!-- Video Preview Overlay -->
+    <div v-if="currentVideoId" class="video-preview-overlay" @click="closeVideoPreview">
+      <div class="video-preview-content" @click.stop>
+        <div class="video-preview-header">
+          <h3>视频预览 - ID: {{ currentVideoId }}</h3>
+          <button @click="closeVideoPreview" class="close-btn">×</button>
+        </div>
+        <div class="video-preview-body">
+          <VideoComponent 
+            :taskId="currentVideoId" 
+            taskType="competition"
+          />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import CompetitionAddingComponent from '../components/CompetitionAddingComponent.vue';
+import VideoComponent from '../components/VideoComponent.vue'; // Import the VideoComponent
 
 export default {
   name: 'AdminView',
   components: {
-    CompetitionAddingComponent
+    CompetitionAddingComponent,
+    VideoComponent // Add VideoComponent to components
   },
   data() {
     return {
@@ -133,7 +158,9 @@ export default {
       // For viewing competition details
       selectedCompetition: null,
       // New property for list type selection
-      selectedListType: ''
+      selectedListType: '',
+      // Video preview state
+      currentVideoId: null
     }
   },
   computed: {
@@ -251,6 +278,15 @@ export default {
       }, 3000);
       // Refresh the competition list after successful submission
       this.fetchCompetitions();
+    },
+    
+    // New methods for video preview functionality
+    previewVideo(competitionId) {
+      this.currentVideoId = competitionId;
+    },
+    
+    closeVideoPreview() {
+      this.currentVideoId = null;
     }
   }
 }
@@ -470,10 +506,33 @@ select, input {
   padding: 0.4rem 0.8rem;
   border-radius: 4px;
   cursor: pointer;
+  margin-right: 0.5rem;
 }
 
 .view-btn:hover {
   background: #0b7dda;
+}
+
+.video-btn {
+  background: #3498db;
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.video-btn:hover:not([disabled]) {
+  background: #2980b9;
+  transform: translateY(-1px);
+}
+
+.video-btn:disabled {
+  background: #b3c1dc;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .empty-state {
@@ -531,5 +590,70 @@ select, input {
   0% { opacity: 1; }
   70% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* Video Preview Overlay */
+.video-preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.video-preview-content {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.video-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #eee;
+  background: #f8f8f8;
+}
+
+.video-preview-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.25rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.video-preview-body {
+  padding: 1.5rem;
+  overflow: auto;
+  flex: 1;
+  display: flex;
+  justify-content: center;
 }
 </style>
