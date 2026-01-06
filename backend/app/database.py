@@ -10,7 +10,6 @@ DB_CONFIG = {
     "user": "postgres",
     "password": "Toosimple0531"
 }
-
 @contextmanager
 def get_db_connection():
     """获取数据库连接的上下文管理器"""
