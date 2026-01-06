@@ -90,7 +90,7 @@ pip install -r requirements.txt
 ```
 server {
     listen 80;
-    server_name 106.15.38.222;  # 你的域名或服务器IP
+    server_name 101.132.78.104;  # 你的域名或服务器IP
     root /root/Onsite/frontend;  # Vue构建目录
     index index.html;
 

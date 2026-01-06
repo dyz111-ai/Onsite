@@ -400,7 +400,7 @@ const confirmTest = async () => {
     closeTestDialog()
     
    
-    const delay = Math.floor(Math.random() * 2000) + 2000 // 2000-4000ms
+    const delay = Math.floor(Math.random() * 5000) + 10000 
     setTimeout(async () => {
       try {
         const response = await api.put(`/training/records/${trainingId}/status`, { 

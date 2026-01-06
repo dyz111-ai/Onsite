@@ -49,6 +49,7 @@ class TrainingService:
 
             # 实时读取输出并保存到文件
             selected_port = None
+            server_unavailable = False
             with open(realtime_log_path, 'a', encoding='utf-8') as log_file:
                 while True:
                     line = process.stdout.readline()
@@ -77,6 +78,10 @@ class TrainingService:
                             except:
                                 pass
                         
+                        # 检测服务器不可用错误
+                        if '[ERROR] 暂无可用服务器' in decoded_line:
+                            server_unavailable = True
+                        
                         socketio.emit('training_log', {'message': decoded_line, 'training_id': training_id})
 
             # 等待进程结束
@@ -94,12 +99,18 @@ class TrainingService:
                 TrainingService.update_training_status(training_id, 'Trained', set_end_time=True)
                 
                 socketio.emit('training_complete', {'status': 'success', 'message': '训练完成', 'training_id': training_id})
+            elif server_unavailable or returncode == 3:
+                # 服务器不可用，设置为训练失败
+                TrainingService.update_training_status(training_id, 'Failed', set_end_time=True)
+                socketio.emit('training_complete', {'status': 'error', 'message': '训练失败：暂无可用服务器', 'training_id': training_id})
             else:
-                # 训练失败也设置结束时间
-                TrainingService.update_training_status(training_id, 'Training', set_end_time=True)
+                # 其他训练失败情况也设置结束时间
+                TrainingService.update_training_status(training_id, 'Failed', set_end_time=True)
                 socketio.emit('training_complete', {'status': 'error', 'message': f'训练失败 (返回码: {returncode})', 'training_id': training_id})
 
         except Exception as e:
+            # 异常情况也设置为训练失败
+            TrainingService.update_training_status(training_id, 'Failed', set_end_time=True)
             socketio.emit('training_complete', {'status': 'error', 'message': str(e), 'training_id': training_id})
     
     @staticmethod
