@@ -652,7 +652,8 @@ const getStatusText = (status) => {
     'Training': '训练中',
     'Trained': '训练完成',
     'Testing': '测试中',
-    'Tested': '测试完成'
+    'Tested': '测试完成',
+    'Failed':'训练失败',
   }
   return textMap[status] || status
 }
@@ -660,7 +661,7 @@ const getStatusText = (status) => {
 onMounted(() => {
   loadTrainingRecords()
   
-  socket = io('http://101.132.78.104')
+  socket = io()  // 使用相对路径，自动连接到当前域名
 
   socket.on('connect', () => {
     console.log('WebSocket已连接')
@@ -676,6 +677,7 @@ onMounted(() => {
         if (!record.logs) {
           record.logs = []
         }
+        // 使用Vue响应式方式更新数组
         record.logs.push(data.message)
         if (record.showLogs) {
           scrollToBottom(trainingId)
