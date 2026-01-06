@@ -88,5 +88,21 @@ class Competition:
             print(f"Update failed: {e}")
             raise e
         
+    def set_failed(competition_id: int):
+        """Set competition as failed"""
+        try:
+            with get_db_cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE competition
+                    SET status = 'Failed'
+                    WHERE competition_id = %s
+                    """,
+                    (competition_id,)
+                )
+        except Exception as e:
+            print(f"Update failed: {e}")
+            raise e
+        
     
     

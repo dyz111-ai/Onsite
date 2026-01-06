@@ -88,6 +88,22 @@ class TaskSubmit:
         except Exception as e:
             print(f"Update failed: {e}")
 
+    
+    def set_failed(render_id: int) -> None:
+        """Set the status of a render record to 'Completed'"""
+        try:
+            with get_db_cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE render
+                    SET status = 'Failed'
+                    WHERE render_id = %s
+                    """,
+                    (render_id,)
+                )
+        except Exception as e:
+            print(f"Update failed: {e}")
+
     def update_cost(render_id: int, render_cost: float):
         try:
             with get_db_cursor() as cursor:

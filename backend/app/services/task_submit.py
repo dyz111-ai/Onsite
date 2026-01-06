@@ -42,12 +42,14 @@ class TaskSubmitService:
                             capture_output=True,
                             text=True
                         )
-                        
-                        cost = TrainingTask.calculate_cost_from_csv(os.path.join(base_dir, "..", "frontend" ,"cache", "render", "cost", str(render_id)+".csv"))
-                        TaskSubmit.update_cost(render_id, cost)
+                        if result == 0:
+                            cost = TrainingTask.calculate_cost_from_csv(os.path.join(base_dir, "..", "frontend" ,"cache", "render", "cost", str(render_id)+".csv"))
+                            TaskSubmit.update_cost(render_id, cost)
+                            TaskSubmit.set_completed(render_id)
+                        else:
+                            TaskSubmit.set_failed(render_id)
 
                         # Only set published if script completed successfully (exit code 0)
-                        TaskSubmit.set_completed(render_id)
                         if result.returncode == 0:
                             app.logger.info(f"Render {render_id} published successfully")
                         else:

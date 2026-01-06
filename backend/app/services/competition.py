@@ -44,10 +44,11 @@ class CompetitionService:
                         )
                         
                         # Only set published if script completed successfully (exit code 0)
-                        Competition.set_published(competition_id)
                         if result.returncode == 0:
+                            Competition.set_published(competition_id)
                             app.logger.info(f"Competition {competition_id} published successfully")
                         else:
+                            Competition.set_failed(competition_id)
                             app.logger.error(
                                 f"Render script failed with exit code {result.returncode}\n"
                                 f"Stdout: {result.stdout}\n"
