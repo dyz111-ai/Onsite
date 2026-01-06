@@ -348,6 +348,13 @@ const loadTrainingRecords = async () => {
       }
     })
     
+    // 将所有"训练中"状态的训练ID添加到activeTrainingIds
+    trainingRecords.value.forEach(record => {
+      if (record.status === 'Training') {
+        activeTrainingIds.add(record.training_id)
+      }
+    })
+    
     // 为训练中的记录加载实时日志历史
     for (const record of trainingRecords.value) {
       if (record.status === 'Training') {
@@ -670,9 +677,10 @@ onMounted(() => {
   socket.on('training_log', (data) => {
     console.log('收到日志:', data)
     const trainingId = data.training_id
-    if (trainingId && activeTrainingIds.has(trainingId)) {
+    if (trainingId) {
       const record = trainingRecords.value.find(r => r.training_id === trainingId)
-      if (record) {
+      // 只要找到记录且状态是训练中，就添加日志
+      if (record && record.status === 'Training') {
         if (!record.logs) {
           record.logs = []
         }
@@ -687,20 +695,21 @@ onMounted(() => {
   socket.on('training_complete', async (data) => {
     console.log('训练完成:', data)
     const trainingId = data.training_id
-    if (trainingId && activeTrainingIds.has(trainingId)) {
-      const record = trainingRecords.value.find(r => r.training_id === trainingId)
-      if (record) {
-        if (data.status === 'success') {
-          message.value = `训练 ${trainingId} 完成！`
-          messageType.value = 'success'
-          
-          await refreshSingleRecord(trainingId)
-        } else {
-          message.value = `训练 ${trainingId} 失败：${data.message}`
-          messageType.value = 'error'
-        }
+    
+    // 移除活跃训练ID
+    activeTrainingIds.delete(trainingId)
+    
+    const record = trainingRecords.value.find(r => r.training_id === trainingId)
+    if (record) {
+      if (data.status === 'success') {
+        message.value = `训练 ${trainingId} 完成！`
+        messageType.value = 'success'
+        
+        await refreshSingleRecord(trainingId)
+      } else {
+        message.value = `训练 ${trainingId} 失败：${data.message}`
+        messageType.value = 'error'
       }
-      activeTrainingIds.delete(trainingId)
     }
   })
 

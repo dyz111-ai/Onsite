@@ -25,7 +25,6 @@ SERVER1_PORT=44939
 SERVER2_PORT=19567
 SERVER_HOST="connect.cqa1.seetacloud.com"
 SERVER_USER="root"
-SERVER_PASSWORD="ZjDV3iDiZMNV"
 SERVER_PATH="/root/autodl-tmp/docker-monitor"
 GPU_THRESHOLD=15000
 
@@ -35,29 +34,31 @@ echo "=== Checking available servers ==="
 echo "Checking Server 1 (port $SERVER1_PORT)..."
 
 # 先检查是否有训练进程在运行
-sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no -p $SERVER1_PORT $SERVER_USER@$SERVER_HOST "ps aux | grep -E '(train\.py|torch\.distributed\.launch)' | grep -v grep | wc -l" > "$TEMP_PROC1" 2>/dev/null
+ssh -o StrictHostKeyChecking=no -p $SERVER1_PORT $SERVER_USER@$SERVER_HOST "ps aux | grep -E '(train\.py|torch\.distributed\.launch)' | grep -v grep | wc -l" > "$TEMP_PROC1" 2>/dev/null
 if [ $? -eq 0 ]; then
     PROC_COUNT1=$(cat "$TEMP_PROC1")
     echo "Server 1 training processes: $PROC_COUNT1"
     
     if [ "$PROC_COUNT1" -eq 0 ]; then
         # 没有训练进程，检查显存
-        sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no -p $SERVER1_PORT $SERVER_USER@$SERVER_HOST "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -n 1" > "$TEMP1" 2>/dev/null
+        ssh -o StrictHostKeyChecking=no -p $SERVER1_PORT $SERVER_USER@$SERVER_HOST "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -n 1" > "$TEMP1" 2>/dev/null
         if [ $? -eq 0 ]; then
             GPU1=$(cat "$TEMP1")
             echo "Server 1 GPU free: $GPU1 MB"
-            if [ "$GPU1" -gt "$GPU_THRESHOLD" ]; then
+            
+            # 检查GPU1是否是有效数字
+            if [[ "$GPU1" =~ ^[0-9]+$ ]] && [ "$GPU1" -gt "$GPU_THRESHOLD" ]; then
                 SELECTED_PORT=$SERVER1_PORT
                 # 清理临时文件
                 rm -f "$TEMP_PROC1" "$TEMP1" 2>/dev/null
                 # 跳转到运行部分
                 echo "Using server port: $SELECTED_PORT"
-                sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no -p $SELECTED_PORT $SERVER_USER@$SERVER_HOST "bash $SERVER_PATH/main-zyd.sh train$TRAINING_ID"
+                ssh -o StrictHostKeyChecking=no -p $SELECTED_PORT $SERVER_USER@$SERVER_HOST "bash $SERVER_PATH/main-zyd.sh train$TRAINING_ID"
                 if [ $? -ne 0 ]; then
                     exit 1
                 fi
                 
-                sshpass -p "$SERVER_PASSWORD" scp -o StrictHostKeyChecking=no -r -P $SELECTED_PORT $SERVER_USER@$SERVER_HOST:$SERVER_PATH/runs/train$TRAINING_ID "$RESULT_DIR"
+                scp -o StrictHostKeyChecking=no -r -P $SELECTED_PORT $SERVER_USER@$SERVER_HOST:$SERVER_PATH/runs/train$TRAINING_ID "$RESULT_DIR"
                 if [ $? -ne 0 ]; then
                     exit 2
                 fi
@@ -66,6 +67,8 @@ if [ $? -eq 0 ]; then
                 rm -f "$TEMP_DIR"/*_${TRAINING_ID}_*.txt 2>/dev/null
                 
                 exit 0
+            else
+                echo "Server 1 GPU check failed or no GPU available: $GPU1"
             fi
             rm -f "$TEMP1" 2>/dev/null
         else
@@ -84,14 +87,14 @@ fi
 echo "Checking Server 2 (port $SERVER2_PORT)..."
 
 # 先检查是否有训练进程在运行
-sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no -p $SERVER2_PORT $SERVER_USER@$SERVER_HOST "ps aux | grep -E '(train\.py|torch\.distributed\.launch)' | grep -v grep | wc -l" > "$TEMP_PROC2" 2>/dev/null
+ssh -o StrictHostKeyChecking=no -p $SERVER2_PORT $SERVER_USER@$SERVER_HOST "ps aux | grep -E '(train\.py|torch\.distributed\.launch)' | grep -v grep | wc -l" > "$TEMP_PROC2" 2>/dev/null
 if [ $? -eq 0 ]; then
     PROC_COUNT2=$(cat "$TEMP_PROC2")
     echo "Server 2 training processes: $PROC_COUNT2"
     
     if [ "$PROC_COUNT2" -eq 0 ]; then
         # 没有训练进程，检查显存
-        sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no -p $SERVER2_PORT $SERVER_USER@$SERVER_HOST "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -n 1" > "$TEMP2" 2>/dev/null
+        ssh -o StrictHostKeyChecking=no -p $SERVER2_PORT $SERVER_USER@$SERVER_HOST "nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -n 1" > "$TEMP2" 2>/dev/null
         if [ $? -eq 0 ]; then
             GPU2=$(cat "$TEMP2")
             echo "Server 2 GPU free: $GPU2 MB"
@@ -101,12 +104,12 @@ if [ $? -eq 0 ]; then
                 rm -f "$TEMP_PROC2" "$TEMP2" 2>/dev/null
                 # 跳转到运行部分
                 echo "Using server port: $SELECTED_PORT"
-                sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no -p $SELECTED_PORT $SERVER_USER@$SERVER_HOST "bash $SERVER_PATH/main-zyd.sh train$TRAINING_ID"
+                ssh -o StrictHostKeyChecking=no -p $SELECTED_PORT $SERVER_USER@$SERVER_HOST "bash $SERVER_PATH/main-zyd.sh train$TRAINING_ID"
                 if [ $? -ne 0 ]; then
                     exit 1
                 fi
                 
-                sshpass -p "$SERVER_PASSWORD" scp -o StrictHostKeyChecking=no -r -P $SELECTED_PORT $SERVER_USER@$SERVER_HOST:$SERVER_PATH/runs/train$TRAINING_ID "$RESULT_DIR"
+                scp -o StrictHostKeyChecking=no -r -P $SELECTED_PORT $SERVER_USER@$SERVER_HOST:$SERVER_PATH/runs/train$TRAINING_ID "$RESULT_DIR"
                 if [ $? -ne 0 ]; then
                     exit 2
                 fi

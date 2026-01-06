@@ -34,4 +34,4 @@ def handle_disconnect():
 
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=8000, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', debug=True, port=8000, allow_unsafe_werkzeug=True)
