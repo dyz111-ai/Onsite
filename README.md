@@ -86,7 +86,7 @@ pip install -r requirements.txt
 
 ## 部署
 ### nginx
-`nano /etc/nginx/sites-available/vue-flask-app`并输入以下内容：
+`nano /etc/nginx/sites-available/onsite`并输入以下内容：
 ```
 server {
     listen 80;
@@ -141,7 +141,7 @@ server {
 保存配置后，执行以下命令：
 ```
 # 创建符号链接
-ln -s /etc/nginx/sites-available/vue-flask-app /etc/nginx/sites-enabled/
+ln -s /etc/nginx/sites-available/onsite /etc/nginx/sites-enabled/
 
 # 测试Nginx配置
 nginx -t
